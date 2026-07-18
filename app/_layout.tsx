@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import type { EventSubscription } from 'expo-modules-core';
 import { LockScreen } from '../components/LockScreen';
 import { addNotificationTapListener, configureNotificationHandler } from '../lib/notifications';
 import { loadProfile } from '../lib/storage';
@@ -35,12 +36,25 @@ export default function RootLayout() {
   }, [evaluateLock]);
 
   useEffect(() => {
-    configureNotificationHandler();
-    const subscription = addNotificationTapListener((session) => {
+    let cancelled = false;
+    let subscription: EventSubscription | null = null;
+
+    configureNotificationHandler().catch(() => undefined);
+    addNotificationTapListener((session) => {
       router.push({ pathname: '/checkin', params: { session } });
-    });
+    })
+      .then((sub) => {
+        if (cancelled) {
+          sub?.remove();
+        } else {
+          subscription = sub;
+        }
+      })
+      .catch(() => undefined);
+
     return () => {
-      subscription.remove();
+      cancelled = true;
+      subscription?.remove();
     };
   }, []);
 

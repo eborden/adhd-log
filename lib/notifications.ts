@@ -1,14 +1,32 @@
-import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
+import { isRunningInExpoGo } from 'expo';
 import type { EventSubscription } from 'expo-modules-core';
+import type * as Notifications from 'expo-notifications';
 import type { Profile, Session, TimeOfDay } from './types';
+
+type NotificationsModule = typeof Notifications;
+
+// expo-notifications throws at *import* time on Android inside Expo Go
+// (push functionality was removed from Expo Go in SDK 53) — a static
+// top-level import would crash the whole app there. Loading it lazily,
+// only when safe, keeps the rest of the app usable in Expo Go. Matches
+// the exact check expo-notifications itself uses internally.
+const NOTIFICATIONS_UNAVAILABLE = Platform.OS === 'android' && isRunningInExpoGo();
+
+async function loadNotifications(): Promise<NotificationsModule | null> {
+  if (NOTIFICATIONS_UNAVAILABLE) return null;
+  return import('expo-notifications');
+}
 
 const NOTIFICATION_IDS = {
   morning: 'adhd-log-morning-reminder',
   evening: 'adhd-log-evening-reminder',
 } as const;
 
-export function configureNotificationHandler(): void {
-  Notifications.setNotificationHandler({
+export async function configureNotificationHandler(): Promise<void> {
+  const notifications = await loadNotifications();
+  if (notifications === null) return;
+  notifications.setNotificationHandler({
     handleNotification: () =>
       Promise.resolve({
         shouldShowBanner: true,
@@ -20,25 +38,28 @@ export function configureNotificationHandler(): void {
 }
 
 export async function requestNotificationPermissions(): Promise<boolean> {
-  const existing = await Notifications.getPermissionsAsync();
+  const notifications = await loadNotifications();
+  if (notifications === null) return false;
+  const existing = await notifications.getPermissionsAsync();
   if (existing.granted) return true;
-  const requested = await Notifications.requestPermissionsAsync();
+  const requested = await notifications.requestPermissionsAsync();
   return requested.granted;
 }
 
 async function scheduleDaily(
+  notifications: NotificationsModule,
   identifier: string,
   session: Session,
   time: TimeOfDay,
   title: string,
   body: string,
 ): Promise<void> {
-  await Notifications.cancelScheduledNotificationAsync(identifier);
-  await Notifications.scheduleNotificationAsync({
+  await notifications.cancelScheduledNotificationAsync(identifier);
+  await notifications.scheduleNotificationAsync({
     identifier,
     content: { title, body, data: { session } },
     trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      type: notifications.SchedulableTriggerInputTypes.DAILY,
       hour: time.hour,
       minute: time.minute,
     },
@@ -46,7 +67,10 @@ async function scheduleDaily(
 }
 
 export async function scheduleReminders(profile: Profile): Promise<void> {
+  const notifications = await loadNotifications();
+  if (notifications === null) return;
   await scheduleDaily(
+    notifications,
     NOTIFICATION_IDS.morning,
     'morning',
     profile.morningReminder,
@@ -54,6 +78,7 @@ export async function scheduleReminders(profile: Profile): Promise<void> {
     "Quick check-in: dose, sleep, and how you're feeling.",
   );
   await scheduleDaily(
+    notifications,
     NOTIFICATION_IDS.evening,
     'evening',
     profile.eveningReminder,
@@ -63,8 +88,10 @@ export async function scheduleReminders(profile: Profile): Promise<void> {
 }
 
 export async function cancelReminders(): Promise<void> {
-  await Notifications.cancelScheduledNotificationAsync(NOTIFICATION_IDS.morning);
-  await Notifications.cancelScheduledNotificationAsync(NOTIFICATION_IDS.evening);
+  const notifications = await loadNotifications();
+  if (notifications === null) return;
+  await notifications.cancelScheduledNotificationAsync(NOTIFICATION_IDS.morning);
+  await notifications.cancelScheduledNotificationAsync(NOTIFICATION_IDS.evening);
 }
 
 function isSession(value: unknown): value is Session {
@@ -78,8 +105,12 @@ export function sessionFromResponse(response: Notifications.NotificationResponse
   return isSession(session) ? session : null;
 }
 
-export function addNotificationTapListener(onTap: (session: Session) => void): EventSubscription {
-  return Notifications.addNotificationResponseReceivedListener((response) => {
+export async function addNotificationTapListener(
+  onTap: (session: Session) => void,
+): Promise<EventSubscription | null> {
+  const notifications = await loadNotifications();
+  if (notifications === null) return null;
+  return notifications.addNotificationResponseReceivedListener((response) => {
     const session = sessionFromResponse(response);
     if (session !== null) onTap(session);
   });
