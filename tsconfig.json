@@ -13,7 +13,12 @@
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": false
+    // react-native's and @types/node's global.d.ts both declare fetch/URL/
+    // AbortController/etc. with incompatible signatures — an upstream, unfixable
+    // conflict between third-party .d.ts files (not our code). skipLibCheck only
+    // skips checking those files' internal consistency; it never weakens
+    // strictness on our own source, which every other flag here still enforces.
+    "skipLibCheck": true
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
   "exclude": ["node_modules"]

@@ -28,6 +28,12 @@ build, husky blocks the commit):
 **narrow it**, don't assert it. If the type system is in your way, model the data better;
 do not reach for an escape hatch.
 
+One deliberate exception: `skipLibCheck` is `true`, not `false`. `react-native`'s and
+`@types/node`'s global `.d.ts` files declare `fetch`/`URL`/`AbortController`/etc. with
+incompatible signatures — an upstream conflict between two third-party type packages, not
+our code. `skipLibCheck` only skips checking `.d.ts` files' internal consistency; every
+strictness flag above still applies in full to our own source.
+
 ## Domain modeling
 
 - No raw `number`/`string` for meaningful values. Use the aliases, branded types, literal
