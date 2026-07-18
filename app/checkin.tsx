@@ -55,7 +55,10 @@ interface Draft {
 const DEFAULT_SLEEP_HOURS = 7;
 
 const EMPTY_DRAFT: Draft = {
-  doseTaken: false,
+  // Enabled by default: the common case is that the dose was taken, so a fresh
+  // morning check-in starts with this on. Editing an existing entry still
+  // hydrates the stored value via draftFromMorning.
+  doseTaken: true,
   ratings: {},
   sleepHours: DEFAULT_SLEEP_HOURS,
   sideEffects: [],
