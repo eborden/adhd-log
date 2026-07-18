@@ -3,6 +3,50 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Schema-drive the check-in write and detail-read paths (2026-07-18)
+
+**Problem:** The check-in _render_ path was schema-driven and exhaustive (`renderMetric` in
+`app/checkin.tsx` switches the `Metric` union, `default: assertNever`). But four other sites
+hand-enumerated every evening rating key with nothing keeping them in sync: `draftFromEvening`
+(re-hydrate on edit), `handleSave`'s evening branch (7 conditional spreads),
+`app/entry/[date].tsx`'s 7 `RatingRow`s, and `lib/export.ts`'s `MORNING_ACCESSORS` /
+`EVENING_ACCESSORS`. Because every `EveningCheckin` rating is optional and
+`exactOptionalPropertyTypes` is on, a forgotten key produced **no compile error** — so the
+`CLAUDE.md` / `lib/schema.ts` promise "add or rename a tracked metric in `lib/schema.ts` only"
+was false: a new evening scale metric would render and be editable but be **silently dropped on
+save**.
+
+**Decision:** Derive all four sites from the schema key lists instead of hand-listing, without
+changing the persisted JSON shape (no migration — the panel explicitly deferred a keyed
+`ratings` record).
+
+- New RN-free `lib/checkin.ts` owns `Draft`, `EMPTY_DRAFT`, `draftFromMorning`,
+  `draftFromEvening`, and `eveningRatingsFromDraft` — the last two loop `EVENING_RATING_KEYS`
+  rather than naming each field, assigning only defined values (respects
+  `exactOptionalPropertyTypes`). `app/checkin.tsx` imports these; its evening `handleSave`
+  collapses 7 spreads to `...eveningRatingsFromDraft(draft.ratings)`. The `assertNever` render
+  switch is untouched.
+- `lib/export.ts`: replaced the two per-key accessor maps with a single generic
+  `ratingAccessor(session, key)` that does a keyed read (`row.morning?.[key]` /
+  `row.evening?.[key]`), type-safe under `noUncheckedIndexedAccess`. The `RatingKey`-vs-session
+  mismatch is resolved by narrowing through new/existing guards `isMorningRatingKey` /
+  `isEveningRatingKey` (no casts). `computeScaleAverages` now takes a `Session`; `ratingAccessor`
+  returns a total function (never `undefined`), so `app/(tabs)/trends.tsx` drops its redundant
+  undefined checks.
+- `lib/types.ts`: added `MORNING_RATING_KEYS` + `MorningRatingKey` (mirroring the evening const
+  array) and derived `RatingKey = MorningRatingKey | EveningRatingKey` (same set as before).
+- `app/entry/[date].tsx`: renders rating rows by mapping the schema (filtered to `kind: 'scale'`
+  via a type-narrowing predicate) and reading through `ratingAccessor`. Evening rows show
+  enabled metrics **plus** any disabled metric that still has data for that day — a refinement
+  over the plan's "enabled only," so disabling a metric never hides previously-logged history.
+- Tests: new `lib/__tests__/checkin.test.ts` round-trips every `EVENING_RATING_KEYS` entry
+  (draft → checkin → draft) and asserts `eveningRatingsFromDraft` omits undefined keys; extended
+  `export.test.ts` for the generic accessor. `lib/checkin.ts` added to the Vitest coverage set.
+
+**Contract now true:** adding an evening scale metric in `lib/schema.ts` + `EVENING_RATING_KEYS`
+makes it render, save, re-hydrate, show in the entry detail, and count in export averages with
+no other file edited. Supersedes and closes `docs/pending/02-schema-driven-checkin-write-path.md`.
+
 ## Fix dose-restore data loss; extract `restoreBackup` (2026-07-18)
 
 **Problem:** `handleImportJson` in `app/(tabs)/settings.tsx` restored a JSON backup but only
