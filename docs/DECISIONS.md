@@ -3,6 +3,61 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Provider report overhaul (2026-07-18)
+
+**Problem:** The PDF report is the app's whole reason to exist — the one artifact that leaves
+the phone and lands in front of a clinician — but it emitted a thin summary: one grand-mean
+Morning table, one grand-mean Evening table, and a 5-column daily table. A single "mood 3.4"
+flattened the titration story (25 mg for two weeks then 40 mg erased the before/after contrast),
+free-text `notes` were captured and then silently dropped, adherence was invisible, and there
+was no 20-second orientation for a busy provider.
+
+**Decision:** Implemented `docs/pending/06-provider-report-overhaul.md`. `buildReportHtml` now
+takes the full `entries` map plus an explicit `rangeStart`/`rangeEnd` (so period and before/after
+math reaches outside the display window) and a `ReportOptions` object, and renders, in order:
+cover summary → dose timeline → weekly averages → dose-period averages → before/after each dose
+change → adherence → side effects → notes → daily log.
+
+- **Cover summary** — per-metric first-half-vs-second-half trend arrows (▲/▼/▬) with a neutral
+  deadband (`TREND_DEADBAND = 0.3`) _and_ a minimum-sample floor (`MIN_HALF_SAMPLES = 3`), below
+  which the trend is `insufficient` rather than a noise-driven arrow. Every arrow carries an
+  inline, value-free scale-anchor caption from the schema (`1 = Calm, 5 = On edge`) so `anxiety ▲`
+  can't be pattern-matched against `mood ▲`. A multi-dose caveat renders when the range straddles
+  a `DoseChange`.
+- **Per-period averages** replace the grand means: weekly buckets (dropped beyond
+  `MAX_WEEKLY_BUCKET_DAYS = 56`) and dose-period buckets bounded by `DoseChange.date`, each with an
+  inline `<span>`-bar sparkline (same hues/height formula as `trends.tsx`, no charting dependency).
+  Dose-period buckets reach back to the change date that began the active dose, reading the full
+  `entries` map, so a period that started before the display window still averages its real data.
+- **Before/after** each in-range dose change (±`beforeAfterWindowDays`, default 14) via the shared
+  pure `beforeAfterDose` helper (the seam `16-before-after-dose-comparison` will import).
+- **Adherence** as its own neutral block: taken / not-taken / no-entry counts foregrounded, per-date
+  lists de-emphasized to an appendix, "no entry recorded" (never "missed"), and a footnote that
+  it's a binary with no timing/intent. `totalDays` is derived so it can't disagree with the counts.
+- **Notes** rendered as a dated, escaped list gated by an `includeNotes` Settings toggle (default
+  on, export screen only).
+- New shared type `TrendDirection`; report-internal `MetricAverage`/`MetricTrend`/`PeriodBucket`/
+  `BeforeAfter` modeled as discriminated/narrowed unions (illegal states unrepresentable, no
+  sentinel numbers). `REPORT_RATING_ORDER` in `schema.ts` keeps report ordering a single source of
+  truth. No persisted-shape change, no migration, no version bump — a pure read/derive feature;
+  old backups stay importable.
+
+**Deviations from the frozen doc** (item 10 landed first and changed the baseline):
+
+- **Side effects kept item 10's richer section.** The doc planned a positional half-membership
+  design ("present in first half only"); item 10 had already shipped a richer, panel-approved
+  section (onset + dose-active-then, in-range span, ongoing?, days-over-logged-evenings, run-length
+  severity trajectory). Kept that verbatim; dropped the doc's thinner design and its now-obsolete
+  "severity not captured" footnote (severity _is_ captured). The doc's own dependency note
+  anticipated this.
+- **Adherence moved, not duplicated.** Item 10 had bolted a one-line adherence caption onto the
+  side-effects table as a stopgap; that caption moved into the new dedicated block.
+- **Filter by data-in-range, not the Settings toggle.** Per the earlier "Trends/reports reflect
+  data, not the Settings toggle" decision, cover/period metrics appear when they have data in the
+  range, rather than the doc's "filter against `enabledEveningMetricKeys`".
+
+Supersedes and closes `docs/pending/06-provider-report-overhaul.md`.
+
 ## Side-effect severity & onset (2026-07-18)
 
 **Problem:** Side effects were a bare `readonly SideEffect[]` — a chip on or off. The

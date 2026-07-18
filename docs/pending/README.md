@@ -34,7 +34,7 @@ Each doc references its source item in the user-value analysis.
 
 | #   | Plan                                                                      | Priority | Why it matters                                                                                                                               |
 | --- | ------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 06  | [Provider report overhaul](06-provider-report-overhaul.md)                | **P1**   | The report is the deliverable: per-period & before/after-dose averages, adherence, side-effect summary, notes, sparklines, a 20-second cover |
+| 06  | ~~Provider report overhaul~~ ✅ landed (see DECISIONS)                    | **P1**   | The report is the deliverable: per-period & before/after-dose averages, adherence, side-effect summary, notes, sparklines, a 20-second cover |
 | 07  | [Confounder / context tags](07-confounder-context-tags.md)                | **P1**   | Optional one-tap evening tags so the provider can discount confounded days — the biggest lever on signal quality                             |
 | 08  | [Rolling-average trend smoothing](08-rolling-average-trends.md)           | **P1**   | 7-day smoothing makes the weeks-long trend visible under day-to-day noise                                                                    |
 | 09  | [Trend data honesty: coverage + gaps](09-trend-data-honesty.md)           | **P1**   | "Logged 22/30" coverage + unambiguous gap rendering so sparse trends aren't over-read                                                        |
