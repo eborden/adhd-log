@@ -3,6 +3,8 @@ import { __setMockFileExists, __setMockPickedText } from '../__mocks__/expo-file
 import {
   adherenceInRange,
   averageOf,
+  bucketByDosePeriod,
+  bucketByWeek,
   buildBackup,
   buildReportHtml,
   collectNotes,
@@ -20,7 +22,7 @@ import {
   type MetricAverage,
   type ReportOptions,
 } from '../export';
-import { isoTimestampNow } from '../storage';
+import { addDays, isoTimestampNow } from '../storage';
 import type { DayEntry, DoseChange, IsoDate, Profile, Rating, SideEffect } from '../types';
 
 const NO_ONSET = new Map<SideEffect, IsoDate>();
@@ -45,6 +47,23 @@ function eveningRatingRow(date: IsoDate, mood: Rating, anxiety: Rating): DayEntr
     date,
     evening: { ratings: { mood, anxiety }, sideEffects: {}, completedAt: isoTimestampNow() },
   };
+}
+
+/** `count` consecutive evening days from `start` with the same mood/anxiety value each day. */
+function eveningDays(start: IsoDate, count: number, value: Rating): DayEntry[] {
+  const rows: DayEntry[] = [];
+  let date = start;
+  for (let i = 0; i < count; i += 1) {
+    rows.push(eveningRatingRow(date, value, value));
+    date = addDays(date, 1);
+  }
+  return rows;
+}
+
+function entriesFrom(rows: readonly DayEntry[]): Record<IsoDate, DayEntry> {
+  const entries: Record<IsoDate, DayEntry> = {};
+  for (const row of rows) entries[row.date] = row;
+  return entries;
 }
 
 /**
@@ -166,6 +185,57 @@ describe('computeTrend', () => {
   });
 });
 
+describe('bucketByWeek', () => {
+  it('splits display rows into 7-day calendar buckets with labels and per-metric averages', () => {
+    const weeks = bucketByWeek(eveningDays('2026-07-01' as IsoDate, 10, 3));
+    expect(weeks).toHaveLength(2);
+    expect(weeks[0]?.label).toBe('Week 1 (Jul 1–Jul 7)');
+    expect(weeks[1]?.label).toBe('Week 2 (Jul 8–Jul 10)');
+    expect(weeks[0]?.evening.get('mood')).toEqual({ kind: 'value', mean: 3, n: 7 });
+    // a metric never logged in the bucket is explicitly empty, not a zero or a NaN
+    expect(weeks[0]?.evening.get('libido')).toEqual({ kind: 'empty' });
+  });
+});
+
+describe('bucketByDosePeriod', () => {
+  it('cuts the range at each dose change, labeling periods by the active dose', () => {
+    const entries = entriesFrom(eveningDays('2026-07-01' as IsoDate, 16, 3));
+    const doses: readonly DoseChange[] = [
+      { date: '2026-07-01' as IsoDate, dose: { amount: 20, unit: 'mg' } },
+      { date: '2026-07-08' as IsoDate, dose: { amount: 40, unit: 'mg' } },
+    ];
+    const periods = bucketByDosePeriod(
+      entries,
+      doses,
+      '2026-07-01' as IsoDate,
+      '2026-07-16' as IsoDate,
+    );
+    expect(periods).toHaveLength(2);
+    expect(periods[0]?.label).toBe('20mg (Jul 1–Jul 7)');
+    expect(periods[1]?.label).toBe('40mg (Jul 8–Jul 16)');
+    expect(periods[0]?.startDate).toBe('2026-07-01');
+    expect(periods[1]?.startDate).toBe('2026-07-08');
+  });
+
+  it('reaches back before rangeStart to the dose-change date, pulling data from the full map', () => {
+    // Dose set Jun 25, data logged from Jun 25, but the display range only starts Jul 1.
+    const entries = entriesFrom(eveningDays('2026-06-25' as IsoDate, 20, 4));
+    const doses: readonly DoseChange[] = [
+      { date: '2026-06-25' as IsoDate, dose: { amount: 20, unit: 'mg' } },
+    ];
+    const periods = bucketByDosePeriod(
+      entries,
+      doses,
+      '2026-07-01' as IsoDate,
+      '2026-07-05' as IsoDate,
+    );
+    expect(periods).toHaveLength(1);
+    expect(periods[0]?.startDate).toBe('2026-06-25');
+    // Jun 25 → Jul 5 is 11 days, all mood 4 — proves it averaged data from outside the window.
+    expect(periods[0]?.evening.get('mood')).toEqual({ kind: 'value', mean: 4, n: 11 });
+  });
+});
+
 describe('buildReportHtml', () => {
   it('includes the medication name, dose average, and daily rows', () => {
     const profile: Profile = {
@@ -184,7 +254,7 @@ describe('buildReportHtml', () => {
     const html = htmlFromRows(profile, doses, rows);
 
     expect(html).toContain('Atomoxetine');
-    expect(html).toContain('Morning averages');
+    expect(html).toContain('Weekly averages');
     expect(html).toContain('Sleep quality');
     expect(html).toContain(DAY_1);
     expect(html).toContain(DAY_2);
@@ -235,12 +305,14 @@ describe('buildReportHtml', () => {
     };
     const html = htmlFromRows(null, [], [rowMoodFocusOnly, rowWithLibido]);
 
-    // mood/focus answered both days: (5+3)/2 = 4.0
-    expect(html).toContain('<td>Overall mood today</td><td>4.0</td>');
-    expect(html).toContain('<td>Focus / attention</td><td>4.0</td>');
-    // libido answered only on DAY_2: average is still 4.0, just from one day
-    expect(html).toContain('<td>Libido</td><td>4.0</td>');
-    // anxiety never answered on either day: omitted entirely, not shown with a dash
+    // The single weekly bucket means each answered metric: mood/focus (5+3)/2 and libido from
+    // its one day are all 4.0 — the metric-with-partial-data path still computes.
+    expect(html).toContain('Weekly averages');
+    expect(html).toContain('Overall mood today');
+    expect(html).toContain('Focus / attention');
+    expect(html).toContain('Libido');
+    expect(html).toContain('<td>4.0</td>');
+    // anxiety never answered on either day: omitted from every section, never shown with a dash
     expect(html).not.toContain('Anxiety / irritability');
   });
 
@@ -326,6 +398,19 @@ describe('buildReportHtml', () => {
     const html = htmlFromRows(null, [], rows);
     expect(html).toContain('▬');
     expect(html).toContain('first half 3.0 → second half 3.0');
+  });
+
+  it('renders sparkline bars with a concrete hex background, never [object Object]', () => {
+    const html = htmlFromRows(null, [], eveningDays('2026-07-01' as IsoDate, 4, 5));
+    expect(html).toContain('height:48px'); // 8 + 5*8
+    expect(html).toContain('background:#2F8455'); // mood 5, higher-better → the green rating hue
+    expect(html).not.toContain('[object Object]');
+  });
+
+  it('omits weekly buckets beyond the cap but still renders dose-period averages', () => {
+    const html = htmlFromRows(null, [], eveningDays('2026-05-01' as IsoDate, 60, 3));
+    expect(html).not.toContain('Weekly averages');
+    expect(html).toContain('Dose-period averages');
   });
 
   it('shows the multi-dose caveat when a dose change falls inside the range', () => {

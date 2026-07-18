@@ -10,6 +10,7 @@ import {
 } from './schema';
 import { palette } from './tokens';
 import {
+  addDays,
   datesInRange,
   doseActiveOn,
   firstOnsetDates,
@@ -19,16 +20,19 @@ import {
   isMorningRatingKey,
   isoTimestampNow,
   parseEntries,
+  parseIsoDate,
   parseProfile,
 } from './storage';
-import { SIDE_EFFECTS, assertNever } from './types';
+import { EVENING_RATING_KEYS, MORNING_RATING_KEYS, SIDE_EFFECTS, assertNever } from './types';
 import type {
   DayEntry,
   Dose,
   DoseChange,
+  EveningRatingKey,
   IsoDate,
   IsoTimestamp,
   Metric,
+  MorningRatingKey,
   Parsed,
   Profile,
   Rating,
@@ -105,6 +109,10 @@ const TREND_DEADBAND = 0.3;
 // confident-looking arrow.
 const MIN_HALF_SAMPLES = 3;
 
+// Beyond this range length, weekly buckets are omitted and only dose-period buckets render,
+// keeping a long PDF scannable.
+const MAX_WEEKLY_BUCKET_DAYS = 56;
+
 /** The single adapter from a legacy `number | null` mean to the canonical union. */
 export function toMetricAverage(mean: number | null, n: number): MetricAverage {
   return mean === null || n === 0 ? { kind: 'empty' } : { kind: 'value', mean, n };
@@ -144,27 +152,118 @@ export function computeTrend(first: MetricAverage, second: MetricAverage): Metri
   return { kind: 'measured', direction, firstHalf: first.mean, secondHalf: second.mean, delta };
 }
 
-export interface ScaleAverage {
-  readonly label: string;
-  readonly direction: ScaleDirection;
-  readonly average: number | null;
+/**
+ * One averaging period in the report. Keys are narrowed to their own session's union so the
+ * morning map cannot admit an evening-only key like `libido`. Values are `MetricAverage`, so
+ * `Map.get`'s `T | undefined` is the only absence idiom and empty buckets render as `—`.
+ */
+export interface PeriodBucket {
+  readonly label: string; // e.g. "Week 1 (Jul 1–7)" or "40mg (Jul 1–14)"
+  readonly startDate: IsoDate;
+  readonly endDate: IsoDate;
+  readonly morning: ReadonlyMap<MorningRatingKey, MetricAverage>;
+  readonly evening: ReadonlyMap<EveningRatingKey, MetricAverage>;
 }
 
-function computeScaleAverages(
-  metrics: readonly Metric[],
-  session: Session,
-  rows: readonly DayEntry[],
-): readonly ScaleAverage[] {
-  const result: ScaleAverage[] = [];
-  for (const metric of metrics) {
-    if (metric.kind !== 'scale') continue;
-    result.push({
-      label: metric.label,
-      direction: metric.direction,
-      average: averageOf(rows, ratingAccessor(session, metric.key)),
-    });
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
+/** "Jul 7" — a compact month-day label for bucket titles. */
+function shortDate(date: IsoDate): string {
+  const parsed = parseIsoDate(date);
+  const month = MONTHS[parsed.getMonth()];
+  return `${month ?? ''} ${String(parsed.getDate())}`;
+}
+
+/** Averages every rating key over a bucket's rows into the narrowed morning/evening maps. */
+function makeBucket(
+  label: string,
+  startDate: IsoDate,
+  endDate: IsoDate,
+  bucketRows: readonly DayEntry[],
+): PeriodBucket {
+  const morning = new Map<MorningRatingKey, MetricAverage>();
+  for (const key of MORNING_RATING_KEYS) {
+    morning.set(key, metricAverage(bucketRows, ratingAccessor('morning', key)));
   }
-  return result;
+  const evening = new Map<EveningRatingKey, MetricAverage>();
+  for (const key of EVENING_RATING_KEYS) {
+    evening.set(key, metricAverage(bucketRows, ratingAccessor('evening', key)));
+  }
+  return { label, startDate, endDate, morning, evening };
+}
+
+/** 7-day calendar buckets over the (gap-filled, oldest-first) display rows. */
+export function bucketByWeek(rows: readonly DayEntry[]): readonly PeriodBucket[] {
+  const buckets: PeriodBucket[] = [];
+  for (let i = 0; i < rows.length; i += 7) {
+    const chunk = rows.slice(i, i + 7);
+    const first = chunk[0];
+    const last = chunk[chunk.length - 1];
+    if (first === undefined || last === undefined) continue;
+    const label = `Week ${String(i / 7 + 1)} (${shortDate(first.date)}–${shortDate(last.date)})`;
+    buckets.push(makeBucket(label, first.date, last.date, chunk));
+  }
+  return buckets;
+}
+
+/** The dose change in effect on `date` — the last one on/before it. `sorted` is ascending. */
+function lastChangeOnOrBefore(
+  sorted: readonly DoseChange[],
+  date: IsoDate,
+): DoseChange | undefined {
+  let active: DoseChange | undefined;
+  for (const change of sorted) {
+    if (change.date.localeCompare(date) <= 0) active = change;
+    else break;
+  }
+  return active;
+}
+
+/**
+ * Buckets bounded by `DoseChange.date`. Cuts the range at each dose change inside it; the first
+ * period reaches *back* to the change date that began the active dose (which may predate
+ * `rangeStart`) and reads from the full `entries` map, so a period that started weeks before the
+ * display window still averages its real data rather than reporting empty.
+ */
+export function bucketByDosePeriod(
+  entries: Readonly<Record<IsoDate, DayEntry>>,
+  doses: readonly DoseChange[],
+  rangeStart: IsoDate,
+  rangeEnd: IsoDate,
+): readonly PeriodBucket[] {
+  const sorted = [...doses].sort((a, b) => a.date.localeCompare(b.date));
+  const cuts = sorted
+    .map((change) => change.date)
+    .filter((date) => date.localeCompare(rangeStart) > 0 && date.localeCompare(rangeEnd) <= 0);
+  const segmentStarts: readonly IsoDate[] = [rangeStart, ...cuts];
+  const buckets: PeriodBucket[] = [];
+  for (let i = 0; i < segmentStarts.length; i += 1) {
+    const dispStart = segmentStarts[i];
+    if (dispStart === undefined) continue;
+    const nextStart = segmentStarts[i + 1];
+    const dispEnd = nextStart === undefined ? rangeEnd : addDays(nextStart, -1);
+    const active = lastChangeOnOrBefore(sorted, dispStart);
+    const dataStart =
+      active !== undefined && active.date.localeCompare(dispStart) < 0 ? active.date : dispStart;
+    const doseLabel = active === undefined ? 'No dose recorded' : formatDose(active.dose);
+    const label = `${doseLabel} (${shortDate(dataStart)}–${shortDate(dispEnd)})`;
+    const bucketRows = rowsInRange(entries, datesInRange(dataStart, dispEnd));
+    buckets.push(makeBucket(label, dataStart, dispEnd, bucketRows));
+  }
+  return buckets;
 }
 
 /** Rows for a date range, oldest first, filling gaps with empty (unlogged) days. */
@@ -181,10 +280,6 @@ function escapeHtml(value: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-function formatAverage(average: number | null): string {
-  return average === null ? '—' : average.toFixed(1);
 }
 
 function formatRating(rating: Rating | undefined): string {
@@ -386,6 +481,69 @@ function scaleAnchorCaption(metric: ScaleMetric): string {
   return `1 = ${metric.low}, 5 = ${metric.high}`;
 }
 
+/** Same green/clay/ochre rating hues `ratingColor` uses, from the light-theme palette (no new hex). */
+function ratingHexFor(rating: Rating, direction: ScaleDirection): string {
+  if (direction === 'neutral') return palette.ochreStrong;
+  const better = direction === 'higher-better' ? rating >= 4 : rating <= 2;
+  const worse = direction === 'higher-better' ? rating <= 2 : rating >= 4;
+  if (better) return palette.greenStrong;
+  if (worse) return palette.clayStrong;
+  return palette.ochreStrong;
+}
+
+/** Inline `<span>` bar sparkline — same height formula as `trends.tsx`, no charting dependency. */
+function sparklineHtml(values: readonly (Rating | undefined)[], direction: ScaleDirection): string {
+  return values
+    .map((value) => {
+      const height = value === undefined ? 4 : 8 + value * 8;
+      const bg = value === undefined ? palette.warm300 : ratingHexFor(value, direction);
+      return `<span style="display:inline-block;width:4px;height:${String(height)}px;background:${bg};vertical-align:bottom;margin-right:1px"></span>`;
+    })
+    .join('');
+}
+
+/**
+ * A compact per-period averages table: one row per metric that has any data in range, a full-range
+ * sparkline, then one mean column per bucket ('—' for an empty bucket). Returns '' when there are
+ * no buckets or no metric with data.
+ */
+function periodTableHtml(
+  title: string,
+  buckets: readonly PeriodBucket[],
+  rows: readonly DayEntry[],
+): string {
+  if (buckets.length === 0) return '';
+  const metricRows = REPORT_RATING_ORDER.flatMap((key) => {
+    const metric = scaleMetricFor(key);
+    if (metric === undefined) return [];
+    const pick = ratingAccessor(isMorningRatingKey(key) ? 'morning' : 'evening', key);
+    const values = rows.map(pick);
+    if (values.every((value) => value === undefined)) return []; // no data in range → omit
+    // Key narrowed inside the getter so the morning map is never queried with an evening key.
+    const getAvg = (bucket: PeriodBucket): MetricAverage | undefined => {
+      if (isMorningRatingKey(key)) return bucket.morning.get(key);
+      if (isEveningRatingKey(key)) return bucket.evening.get(key);
+      return undefined;
+    };
+    const cells = buckets
+      .map((bucket) => {
+        const avg = getAvg(bucket);
+        return `<td>${avg === undefined || avg.kind === 'empty' ? '—' : avg.mean.toFixed(1)}</td>`;
+      })
+      .join('');
+    return [
+      `<tr><td>${escapeHtml(metric.label)}</td><td>${sparklineHtml(values, metric.direction)}</td>${cells}</tr>`,
+    ];
+  });
+  if (metricRows.length === 0) return '';
+  const headers = buckets.map((bucket) => `<th>${escapeHtml(bucket.label)}</th>`).join('');
+  return `<h2>${escapeHtml(title)}</h2>
+     <table>
+       <tr><th>Metric</th><th>Trend</th>${headers}</tr>
+       ${metricRows.join('')}
+     </table>`;
+}
+
 /**
  * Options for a report render. Range is resolved before this call (via `datesInRange` /
  * `lastNDates`) and arrives as explicit `rangeStart`/`rangeEnd` params, so it is deliberately
@@ -459,9 +617,17 @@ export function buildReportHtml(
           : `<table><tr><th>Metric</th><th>Trend</th></tr>${trendRows.join('')}</table>`
       }`;
 
-  const morningAverages = computeScaleAverages(MORNING_METRICS, 'morning', rows);
-  const eveningAverages = computeScaleAverages(EVENING_METRICS, 'evening', rows).filter(
-    (average) => average.average !== null,
+  // Per-period averages replace the single grand mean, which flattened the titration story.
+  // Weekly buckets are the natural cadence; dose-period buckets are what a titrating provider
+  // reasons from. Weekly buckets are dropped beyond MAX_WEEKLY_BUCKET_DAYS to keep the PDF scannable.
+  const weeklySection =
+    rows.length > MAX_WEEKLY_BUCKET_DAYS
+      ? ''
+      : periodTableHtml('Weekly averages', bucketByWeek(rows), rows);
+  const dosePeriodSection = periodTableHtml(
+    'Dose-period averages',
+    bucketByDosePeriod(entries, doses, rangeStart, rangeEnd),
+    rows,
   );
 
   const header = profile
@@ -480,20 +646,6 @@ export function buildReportHtml(
               }</li>`,
           )
           .join('')}</ul>`;
-
-  const averagesTable = (title: string, averages: readonly ScaleAverage[]): string =>
-    averages.length === 0
-      ? ''
-      : `<h2>${escapeHtml(title)}</h2>
-         <table>
-           <tr><th>Metric</th><th>Average</th></tr>
-           ${averages
-             .map(
-               (row) =>
-                 `<tr><td>${escapeHtml(row.label)}</td><td>${formatAverage(row.average)}</td></tr>`,
-             )
-             .join('')}
-         </table>`;
 
   const sideEffectsCell = (row: DayEntry): string => {
     const evening = row.evening;
@@ -582,8 +734,8 @@ export function buildReportHtml(
       ${header}
       ${coverSummary}
       ${doseTimeline}
-      ${averagesTable('Morning averages', morningAverages)}
-      ${averagesTable('Evening averages', eveningAverages)}
+      ${weeklySection}
+      ${dosePeriodSection}
       ${sideEffectsSection}
       ${notesSection}
       <h2>Daily log</h2>
