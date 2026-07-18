@@ -362,21 +362,45 @@ export function severityRunLength(severities: readonly SideEffectSeverity[]): st
   return parts.join(', ');
 }
 
+/**
+ * Adherence as a taken / not-taken / no-entry split over the display rows. `totalDays` is NOT
+ * stored — it is the sum of the three counts, derived at render, so they can never disagree.
+ * The date lists back the de-emphasized appendix; the language stays neutral ("no entry
+ * recorded", never "missed").
+ */
 export interface AdherenceSummary {
-  readonly dosesTaken: number;
-  readonly loggedMornings: number;
+  readonly takenCount: number; // logged morning, doseTaken === true
+  readonly notTakenCount: number; // logged morning, doseTaken === false
+  readonly noEntryCount: number; // no morning checkin for that date
+  readonly notTakenDates: readonly IsoDate[];
+  readonly noEntryDates: readonly IsoDate[];
 }
 
-export function adherenceInRange(rows: readonly DayEntry[]): AdherenceSummary {
-  let taken = 0;
-  let logged = 0;
+export function computeAdherence(rows: readonly DayEntry[]): AdherenceSummary {
+  let takenCount = 0;
+  let notTakenCount = 0;
+  const notTakenDates: IsoDate[] = [];
+  const noEntryDates: IsoDate[] = [];
   for (const row of rows) {
     const morning = row.morning;
-    if (morning === undefined) continue;
-    logged += 1;
-    if (morning.doseTaken) taken += 1;
+    if (morning === undefined) {
+      noEntryDates.push(row.date);
+      continue;
+    }
+    if (morning.doseTaken) {
+      takenCount += 1;
+    } else {
+      notTakenCount += 1;
+      notTakenDates.push(row.date);
+    }
   }
-  return { dosesTaken: taken, loggedMornings: logged };
+  return {
+    takenCount,
+    notTakenCount,
+    noEntryCount: noEntryDates.length,
+    notTakenDates,
+    noEntryDates,
+  };
 }
 
 export function sideEffectSummary(
@@ -710,6 +734,26 @@ export function buildReportHtml(
       .map((change) => beforeAfterDose(entries, change, options.beforeAfterWindowDays)),
   );
 
+  // Adherence: counts foregrounded, per-date lists de-emphasized to an appendix, neutral language
+  // ("no entry recorded", never "missed"). totalDays is derived so it can't disagree with the counts.
+  const adherence = computeAdherence(rows);
+  const totalDays = adherence.takenCount + adherence.notTakenCount + adherence.noEntryCount;
+  const adherenceAppendix = [
+    adherence.notTakenDates.length > 0
+      ? `<p class="muted">Dose not taken: ${adherence.notTakenDates.map((date) => escapeHtml(date)).join(', ')}</p>`
+      : '',
+    adherence.noEntryDates.length > 0
+      ? `<p class="muted">No entry recorded: ${adherence.noEntryDates.map((date) => escapeHtml(date)).join(', ')}</p>`
+      : '',
+  ].join('');
+  const adherenceSection =
+    totalDays === 0
+      ? ''
+      : `<h2>Adherence</h2>
+         <p>Doses taken: ${String(adherence.takenCount)} · Not taken: ${String(adherence.notTakenCount)} · No entry: ${String(adherence.noEntryCount)} (of ${String(totalDays)} days)</p>
+         <p class="muted">Each day is counted as dose taken, dose not taken, or no morning entry recorded. This carries no timing and does not distinguish an intentionally skipped dose from a forgotten one.</p>
+         ${adherenceAppendix}`;
+
   const header = profile
     ? `<h1>${escapeHtml(profile.medName)}</h1>
        <p>Current dose: ${String(profile.currentDose.amount)}${escapeHtml(profile.currentDose.unit)} · started ${escapeHtml(profile.startDate)}</p>`
@@ -753,13 +797,11 @@ export function buildReportHtml(
     .join('');
 
   const summary = sideEffectSummary(rows, onset, doses);
-  const adherence = adherenceInRange(rows);
   const anyMigrated = summary.some((row) => row.hasMigratedDays);
   const sideEffectsSection =
     summary.length === 0
       ? ''
       : `<h2>Side effects</h2>
-         <p>Dose taken on ${String(adherence.dosesTaken)} of ${String(adherence.loggedMornings)} logged mornings in this range.</p>
          <table>
            <tr>
              <th>Side effect</th><th>Onset</th><th>In range</th><th>Ongoing?</th>
@@ -817,6 +859,7 @@ export function buildReportHtml(
       ${weeklySection}
       ${dosePeriodSection}
       ${beforeAfterSection}
+      ${adherenceSection}
       ${sideEffectsSection}
       ${notesSection}
       <h2>Daily log</h2>

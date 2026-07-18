@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { __setMockFileExists, __setMockPickedText } from '../__mocks__/expo-file-system';
 import {
-  adherenceInRange,
   averageOf,
   beforeAfterDose,
   bucketByDosePeriod,
@@ -9,6 +8,7 @@ import {
   buildBackup,
   buildReportHtml,
   collectNotes,
+  computeAdherence,
   computeTrend,
   exportJsonBackup,
   exportPdfReport,
@@ -373,7 +373,6 @@ describe('buildReportHtml', () => {
     const html = htmlFromRows(null, doses, rows);
 
     expect(html).toContain('<h2>Side effects</h2>');
-    expect(html).toContain('Dose taken on 1 of 2 logged mornings in this range.');
     expect(html).toContain('Nausea');
     expect(html).toContain('Moderate×1, Severe×1');
     expect(html).toContain('40mg');
@@ -476,6 +475,23 @@ describe('buildReportHtml', () => {
     expect(html).not.toContain('<3pm>');
   });
 
+  it('renders a neutral adherence block with counts foregrounded and dates in an appendix', () => {
+    const rows: readonly DayEntry[] = [
+      morningRow(DAY_1, 3), // taken
+      {
+        date: DAY_2,
+        morning: { ratings: {}, doseTaken: false, completedAt: isoTimestampNow() },
+      }, // not taken
+      { date: DAY_3 }, // no entry
+    ];
+    const html = htmlFromRows(null, [], rows);
+    expect(html).toContain('<h2>Adherence</h2>');
+    expect(html).toContain('Doses taken: 1 · Not taken: 1 · No entry: 1 (of 3 days)');
+    expect(html).toContain('No entry recorded: 2026-07-03');
+    // neutral language — a no-morning day is "no entry recorded", never "missed"
+    expect(html).not.toContain('missed');
+  });
+
   it('omits the notes section entirely when includeNotes is false', () => {
     const html = htmlFromRows(null, [], [noteRow(DAY_1, 'private note')], {
       beforeAfterWindowDays: 14,
@@ -530,17 +546,23 @@ describe('severityRunLength', () => {
   });
 });
 
-describe('adherenceInRange', () => {
-  it('counts doses taken over logged mornings, ignoring evening-only days', () => {
+describe('computeAdherence', () => {
+  it('splits days into taken / not-taken / no-entry with the dates for the appendix', () => {
     const rows: readonly DayEntry[] = [
       morningRow(DAY_1, 3), // doseTaken true
-      { date: DAY_2 }, // no morning
+      { date: DAY_2 }, // no morning → no entry
       {
         date: DAY_3,
         morning: { ratings: {}, doseTaken: false, completedAt: isoTimestampNow() },
       },
     ];
-    expect(adherenceInRange(rows)).toEqual({ dosesTaken: 1, loggedMornings: 2 });
+    expect(computeAdherence(rows)).toEqual({
+      takenCount: 1,
+      notTakenCount: 1,
+      noEntryCount: 1,
+      notTakenDates: [DAY_3],
+      noEntryDates: [DAY_2],
+    });
   });
 });
 

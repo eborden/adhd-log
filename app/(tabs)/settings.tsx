@@ -8,6 +8,7 @@ import { Toggle } from '../../components/Toggle';
 import { useFocusLoad } from '../../hooks/useFocusLoad';
 import { parseDoseAmount } from '../../lib/checkin';
 import {
+  DEFAULT_REPORT_OPTIONS,
   buildBackup,
   buildReportHtml,
   exportJsonBackup,
@@ -62,6 +63,7 @@ export default function Settings() {
   const [newAmount, setNewAmount] = useState('');
   const [newUnit, setNewUnit] = useState<DoseUnit>('mg');
   const [newNote, setNewNote] = useState('');
+  const [includeNotes, setIncludeNotes] = useState(true);
   const [busy, setBusy] = useState(false);
 
   if (profile === null) {
@@ -113,7 +115,10 @@ export default function Settings() {
       const [entries, currentDoses] = await Promise.all([loadEntries(), loadDoseChanges()]);
       const today = todayIsoDate();
       const rangeStart = addDays(today, -29);
-      const html = buildReportHtml(currentProfile, currentDoses, entries, rangeStart, today);
+      const html = buildReportHtml(currentProfile, currentDoses, entries, rangeStart, today, {
+        ...DEFAULT_REPORT_OPTIONS,
+        includeNotes,
+      });
       await exportPdfReport(html);
     } catch {
       Alert.alert('Could not export the PDF report.');
@@ -279,6 +284,7 @@ export default function Settings() {
 
       <SectionLabel>Export</SectionLabel>
       <Card style={[styles.section, styles.exportGroup]}>
+        <Toggle label="Include notes in PDF" value={includeNotes} onChange={setIncludeNotes} />
         <Button
           label="Export PDF report (30 days)"
           variant="secondary"
