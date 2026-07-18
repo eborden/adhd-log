@@ -45,3 +45,6 @@ coverage/
 
 # local claude settings
 .claude/settings.local.json
+
+# signing secrets (keystore + passwords) — never commit
+credentials/
