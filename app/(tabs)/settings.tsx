@@ -27,7 +27,7 @@ import {
   loadDoseChanges,
   loadEntries,
   loadProfile,
-  saveEntries,
+  restoreBackup,
   saveProfile,
   todayIsoDate,
 } from '../../lib/storage';
@@ -144,16 +144,8 @@ export default function Settings() {
         Alert.alert('Import failed', result.reason);
         return;
       }
-      const {
-        profile: importedProfile,
-        doses: importedDoses,
-        entries: importedEntries,
-      } = result.value;
-      if (importedProfile !== null) {
-        updateProfile(importedProfile);
-      }
-      setDoses(importedDoses);
-      await saveEntries(importedEntries);
+      await restoreBackup(result.value);
+      refresh(); // reflect what was actually persisted, not hand-set state
       Alert.alert('Backup restored');
     } catch {
       Alert.alert('Could not import the backup.');

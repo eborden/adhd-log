@@ -27,10 +27,13 @@ import {
   parseEntries,
   parseIsoDate,
   parseProfile,
+  restoreBackup,
   saveCheckin,
   saveProfile,
   todayIsoDate,
 } from '../storage';
+import { buildBackup } from '../export';
+import type { Backup } from '../export';
 import type { DayEntry, DoseChange, IsoDate, Profile } from '../types';
 
 const VALID_PROFILE = {
@@ -391,6 +394,62 @@ describe('persistence', () => {
     const updated = (await loadEntries())[date];
     expect(updated?.morning?.sleepQuality).toBe(2);
     expect(updated?.evening?.mood).toBe(3);
+  });
+
+  it('restoreBackup persists profile, doses, and entries together', async () => {
+    const profile = buildProfile();
+    const doses: readonly DoseChange[] = [
+      { date: '2026-07-01' as IsoDate, dose: { amount: 20, unit: 'mg' } },
+    ];
+    const entries: Readonly<Record<IsoDate, DayEntry>> = {
+      ['2026-07-01' as IsoDate]: {
+        date: '2026-07-01' as IsoDate,
+        morning: {
+          doseTaken: true,
+          sleepQuality: 4,
+          wakingMood: 4,
+          completedAt: isoTimestampNow(),
+        },
+      },
+    };
+    const backup: Backup = { exportedAt: isoTimestampNow(), profile, doses, entries };
+
+    await restoreBackup(backup);
+
+    expect(await loadProfile()).toEqual(profile);
+    expect(await loadDoseChanges()).toEqual(doses);
+    expect(await loadEntries()).toEqual(entries);
+  });
+
+  it('restoreBackup with a null profile leaves the existing profile untouched', async () => {
+    const existing = buildProfile();
+    await saveProfile(existing);
+    const backup: Backup = { exportedAt: isoTimestampNow(), profile: null, doses: [], entries: {} };
+
+    await restoreBackup(backup);
+
+    expect(await loadProfile()).toEqual(existing);
+    expect(await loadDoseChanges()).toEqual([]);
+  });
+
+  it('round-trips buildBackup -> restoreBackup -> load*', async () => {
+    const profile = buildProfile();
+    const doses: readonly DoseChange[] = [
+      { date: '2026-07-02' as IsoDate, dose: { amount: 40, unit: 'mg' }, note: 'titration' },
+    ];
+    const entries: Readonly<Record<IsoDate, DayEntry>> = {
+      ['2026-07-02' as IsoDate]: {
+        date: '2026-07-02' as IsoDate,
+        evening: { mood: 3, sideEffects: [], completedAt: isoTimestampNow() },
+      },
+    };
+    const backup = buildBackup(profile, doses, entries);
+
+    await restoreBackup(backup);
+
+    expect(await loadProfile()).toEqual(profile);
+    expect(await loadDoseChanges()).toEqual(doses);
+    expect(await loadEntries()).toEqual(entries);
   });
 
   it('clearAllData removes profile, doses, and entries', async () => {

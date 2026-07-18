@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { Backup } from './export';
 import {
   EVENING_RATING_KEYS,
   HOURS,
@@ -340,4 +341,18 @@ export async function saveCheckin(date: IsoDate, input: CheckinInput): Promise<D
 
 export async function clearAllData(): Promise<void> {
   await AsyncStorage.multiRemove([STORAGE_KEYS.profile, STORAGE_KEYS.doses, STORAGE_KEYS.entries]);
+}
+
+/**
+ * Persists all three keys of a parsed backup together, so a restore can't silently drop one.
+ * A `null` profile leaves the existing profile untouched (matches the import UI's contract).
+ * AsyncStorage has no transactions; `Promise.all` gives consistency-on-success, which is enough
+ * for a single-user, local-only app.
+ */
+export async function restoreBackup(backup: Backup): Promise<void> {
+  await Promise.all([
+    backup.profile !== null ? saveProfile(backup.profile) : Promise.resolve(),
+    saveDoseChanges(backup.doses),
+    saveEntries(backup.entries),
+  ]);
 }
