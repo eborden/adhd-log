@@ -1,5 +1,3 @@
-I have what I need — notably the real `loadEntries` fallback (`return parsed.ok ? parsed.value : {}`, i.e. one bad day currently hides _all_ history) and the true `parseBackup` path (`isEntries` at export.ts:236, not `parseEntries`). Producing the final doc.
-
 > **Status:** Proposed — pending implementation · **Priority:** P2 · Ref: analysis #3
 
 # Dose adherence & timing
@@ -57,14 +55,14 @@ export type DoseRecord =
   | { readonly status: 'missed'; readonly reason?: DoseMissReason };
 ```
 
-`MorningCheckin` changes shape — `doseTaken` is removed and a single `dose: DoseRecord` is added:
+`MorningCheckin` changes shape — `doseTaken` is removed and a single `dose: DoseRecord` is added.
+The `ratings` keyed record (see the 2026-07-18 "Ratings as a record" decision) is untouched:
 
 ```ts
 export interface MorningCheckin {
   readonly dose: DoseRecord;
-  readonly sleepQuality: Rating;
+  readonly ratings: Partial<Record<MorningRatingKey, Rating>>;
   readonly sleepHours?: number;
-  readonly wakingMood: Rating;
   readonly completedAt: IsoTimestamp;
 }
 ```
@@ -214,8 +212,15 @@ function readDoseRecord(value: Record<string, unknown>): DoseRecord | null {
 
 export function migrateMorningCheckin(value: unknown): MorningCheckin | null {
   if (!isRecord(value)) return null;
-  if (!isRating(value['sleepQuality'])) return null;
-  if (!isRating(value['wakingMood'])) return null;
+  const ratingsRaw = value['ratings'];
+  if (!isRecord(ratingsRaw)) return null;
+  const ratings: Partial<Record<MorningRatingKey, Rating>> = {};
+  for (const key of MORNING_RATING_KEYS) {
+    const rating = ratingsRaw[key];
+    if (rating === undefined) continue; // sparse ratings are legal
+    if (!isRating(rating)) return null;
+    ratings[key] = rating;
+  }
   if (!isIsoTimestamp(value['completedAt'])) return null;
   const sleepHours = value['sleepHours'];
   if (!(sleepHours === undefined || typeof sleepHours === 'number')) return null;
@@ -225,15 +230,14 @@ export function migrateMorningCheckin(value: unknown): MorningCheckin | null {
 
   return {
     dose,
-    sleepQuality: value['sleepQuality'],
+    ratings,
     ...(sleepHours !== undefined ? { sleepHours } : {}),
-    wakingMood: value['wakingMood'],
     completedAt: value['completedAt'],
   };
 }
 ```
 
-_(Verified with the panel's TypeScript lens: control-flow narrowing on `value['sleepQuality']` etc. survives the intervening `readDoseRecord(value)` call under this repo's exact flags — the return-literal type-checks without assertion.)_
+_(The `ratings` record is read from the nested `value['ratings']` — the current on-disk shape — exactly as the live `isMorningCheckin`/`isRatingsRecord` path does; only the dose field is transformed. `readDoseRecord` still handles the legacy `doseTaken` boolean → `DoseRecord` migration. Building `ratings` by iterating `MORNING_RATING_KEYS` and narrowing each with `isRating` type-checks without assertion.)_
 
 The two current-shape narrowers the design retains are updated in step so they never diverge from the migrator on what counts as valid (they reject legacy `doseTaken` — that is the migrator's job):
 
@@ -254,8 +258,7 @@ export function isDoseRecord(value: unknown): value is DoseRecord {
 export function isMorningCheckin(value: unknown): value is MorningCheckin {
   if (!isRecord(value)) return false;
   if (!isDoseRecord(value['dose'])) return false;
-  if (!isRating(value['sleepQuality'])) return false;
-  if (!isRating(value['wakingMood'])) return false;
+  if (!isRatingsRecord(value['ratings'], MORNING_RATING_KEYS)) return false;
   if (!isIsoTimestamp(value['completedAt'])) return false;
   const sleepHours = value['sleepHours'];
   return sleepHours === undefined || typeof sleepHours === 'number';
@@ -326,7 +329,7 @@ The panel's data-model lens flagged that a single un-migratable day must not sil
 
 ### Backward compatibility
 
-No forced re-onboarding: `Profile` is untouched. Historical `entries` are never rewritten on disk — a legacy `doseTaken: false` day is migrated to `{ status: 'missed' }` **in memory** and only persisted in the new shape when that day is next saved via `saveCheckin` (migrate-on-read). **Import path fix (corrects a factual error in the earlier draft):** `parseBackup` in `lib/export.ts` currently calls `isEntries(entries)` directly (`lib/export.ts:236`, imported at `:8`) — _not_ `parseEntries`. Since `isEntries → isDayEntry → isMorningCheckin` now require the new `dose` shape, leaving `parseBackup` as-is would make **every historical JSON backup fail to import wholesale** (`'Malformed backup: invalid entries'`). Fix: `parseBackup` must call `parseEntries(entries)` and use its `.ok`/`.value`/`.reason`, dropping the `isEntries` import. This is a required code change, not something that "already works." The **export/write** side is confirmed safe: `buildBackup` sources `entries` from an already-migrated in-memory `Record<IsoDate, DayEntry>` via `loadEntries()`, so freshly-written backups never contain legacy `doseTaken` shapes — the round-trip is covered in both directions.
+No forced re-onboarding: `Profile` is untouched. Historical `entries` are never rewritten on disk — a legacy `doseTaken: false` day is migrated to `{ status: 'missed' }` **in memory** and only persisted in the new shape when that day is next saved via `saveCheckin` (migrate-on-read). **Import path fix (corrects a factual error in the earlier draft):** `parseBackup` in `lib/export.ts` currently calls `isEntries(entries)` directly (`lib/export.ts:229`, imported at `:8`) — _not_ `parseEntries`. Since `isEntries → isDayEntry → isMorningCheckin` now require the new `dose` shape, leaving `parseBackup` as-is would make **every historical JSON backup fail to import wholesale** (`'Malformed backup: invalid entries'`). Fix: `parseBackup` must call `parseEntries(entries)` and use its `.ok`/`.value`/`.reason`, dropping the `isEntries` import. This is a required code change, not something that "already works." The **export/write** side is confirmed safe: `buildBackup` sources `entries` from an already-migrated in-memory `Record<IsoDate, DayEntry>` via `loadEntries()`, so freshly-written backups never contain legacy `doseTaken` shapes — the round-trip is covered in both directions.
 
 ## UI touch points
 
@@ -551,7 +554,7 @@ Coverage stays ≥ thresholds (lines/statements/functions 90, branches 85): the 
 
 ### Data-model / migration + privacy + scope — approve-with-changes
 
-- **`parseBackup` routes through `parseEntries` (must-fix):** applied — corrected the earlier false claim; `parseBackup` calls `parseEntries` (dropping the direct `isEntries` call at export.ts:236), with a legacy-backup import test to lock it in.
+- **`parseBackup` routes through `parseEntries` (must-fix):** applied — corrected the earlier false claim; `parseBackup` calls `parseEntries` (dropping the direct `isEntries` call at export.ts:229), with a legacy-backup import test to lock it in.
 - **Single-day failure behavior (must-fix):** applied with a decision grounded in the real `loadEntries` fallback (`return … : {}`, i.e. total in-memory history loss): strict `parseEntries` for import (loud, names the date) and a resilient `salvageEntries` for the read path (keeps good days, drops only the corrupt one). Chosen over blanket blob rejection precisely because the current fallback is more destructive than the review assumed.
 - **`buildBackup` sources migrated entries (suggestion):** applied — one-line confirmation added.
 - **`DoseChange` needs no migration (suggestion):** applied — stated explicitly in Non-goals.

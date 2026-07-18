@@ -1,7 +1,3 @@
-I have everything I need. Here is the finalized document.
-
----
-
 > **Status:** Proposed — pending implementation · **Priority:** P1 · Ref: analysis #8, #9 · Panel-reviewed (4 lenses; must-fixes applied)
 
 # Trend data honesty: coverage + gaps

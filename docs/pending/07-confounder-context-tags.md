@@ -1,5 +1,3 @@
-The repo checks confirm the reviewers' claims. Writing the final doc now.
-
 > **Status:** Approved — pending implementation · **Priority:** P1 · Ref: analysis #1 · Panel-reviewed (4 lenses; must-fixes applied)
 
 # Confounder / context tags
@@ -57,13 +55,7 @@ export type ContextTag = (typeof CONTEXT_TAGS)[number];
 
 ```ts
 export interface EveningCheckin {
-  readonly mood?: Rating;
-  readonly focus?: Rating;
-  readonly impulsivity?: Rating;
-  readonly anxiety?: Rating;
-  readonly energy?: Rating;
-  readonly appetite?: Rating;
-  readonly libido?: Rating;
+  readonly ratings: Partial<Record<EveningRatingKey, Rating>>; // unchanged (keyed record)
   readonly sideEffects: readonly SideEffect[];
   readonly contextTags?: readonly ContextTag[]; // new — absence === "none recorded"
   readonly notes?: string;
@@ -132,7 +124,7 @@ export const CONTEXT_TAG_LABELS: Readonly<Record<ContextTag, string>> = {
 
 Add `isContextTag` and extend `isEveningCheckin` in `lib/storage.ts`. Parse-don't-validate; the field is optional, so `undefined` is valid and a present value must be an array of known tags.
 
-The live `isEveningCheckin` (lib/storage.ts:125–136) is a sequence of early-return `if` statements ending in `return notes === undefined || typeof notes === 'string';`, and its narrowed parameter is named `value` (a `Record<string, unknown>` from `isRecord`). Under `noPropertyAccessFromIndexSignature: true` property access **must** use bracket notation, and array narrowing **must** use the file's own `isUnknownArray` helper — raw `Array.isArray` narrows the element type to `any[]` (per the comment above `isUnknownArray`) and would trip `no-unsafe-*` under the `strictTypeChecked` config. The snippet below mirrors the adjacent `sideEffects` check verbatim and slots in as an early return before the final `notes` return:
+The live `isEveningCheckin` (lib/storage.ts:142–150) is a sequence of early-return `if` statements ending in `return notes === undefined || typeof notes === 'string';`, and its narrowed parameter is named `value` (a `Record<string, unknown>` from `isRecord`). Under `noPropertyAccessFromIndexSignature: true` property access **must** use bracket notation, and array narrowing **must** use the file's own `isUnknownArray` helper — raw `Array.isArray` narrows the element type to `any[]` (per the comment above `isUnknownArray`) and would trip `no-unsafe-*` under the `strictTypeChecked` config. The snippet below mirrors the adjacent `sideEffects` check verbatim and slots in as an early return before the final `notes` return:
 
 ```ts
 // lib/storage.ts

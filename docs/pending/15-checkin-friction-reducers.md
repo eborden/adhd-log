@@ -110,26 +110,21 @@ The first draft prefilled the whole draft via `draftFromMorning`/`draftFromEveni
 //                   dose-actionable signal in non-stimulant titration.
 //   - notes       : stale narrative context ("started new job") must not persist.
 export function copyableRatings(prior: PriorCheckin): Partial<Record<RatingKey, Rating>> {
-  if (prior.session === 'morning') {
-    const { sleepQuality, wakingMood } = prior.checkin; // both required Ratings
-    return { sleepQuality, wakingMood };
-  }
-  const { mood, focus, impulsivity, anxiety, energy, appetite, libido } = prior.checkin;
-  // Conditional spreads omit undefined optionals (exactOptionalPropertyTypes-safe;
-  // same idiom handleSave uses to build EveningCheckin).
-  return {
-    ...(mood !== undefined && { mood }),
-    ...(focus !== undefined && { focus }),
-    ...(impulsivity !== undefined && { impulsivity }),
-    ...(anxiety !== undefined && { anxiety }),
-    ...(energy !== undefined && { energy }),
-    ...(appetite !== undefined && { appetite }),
-    ...(libido !== undefined && { libido }),
-  };
+  // Since the 2026-07-18 "Ratings as a record" reshape, every check-in already isolates its
+  // scale ratings in `checkin.ratings` — doseTaken, sleepHours, sideEffects, and notes live
+  // *outside* that record. So copying the record spreads exactly the copyable fields and
+  // structurally excludes the must-be-fresh ones; no cherry-picking, no session split.
+  // Undefined optionals are simply absent from the source record (nothing to spread).
+  return { ...prior.checkin.ratings };
 }
 ```
 
-The `prior.session === 'morning' ? … : …` split is a total ternary over the two-member `Session` union — the repo's `switch`+`assertNever` convention is for open/extensible discriminants, and `Session` is a closed two-member union with no third session type planned. A `never`-guarded switch here would be dead ceremony; the two-arm return is exhaustive by construction. (Same reasoning applies to the notification-routing ternary below.)
+`copyableRatings` needs no `session` branch: both `MorningCheckin.ratings` and
+`EveningCheckin.ratings` are `Partial<Record<…RatingKey, Rating>>` sub-records, so spreading
+either yields a value assignable to `Partial<Record<RatingKey, Rating>>`. (The
+notification-routing ternary below is likewise a total two-arm branch over the closed `Session`
+union — the repo's `switch`+`assertNever` convention is for open/extensible discriminants, so a
+`never`-guarded switch there would be dead ceremony.)
 
 ### Notification payload
 
@@ -206,7 +201,7 @@ Every seam that must change, with the non-generic ones flagged.
 
 ## Export / report
 
-**n/a for the report body.** `lib/export.ts` accessors (`MORNING_ACCESSORS`, `EVENING_ACCESSORS`, `ratingAccessor`, `averageOf`, `rowsInRange`) and `buildReportHtml` are unchanged — the data they consume is identical in shape whether a day was logged manually or via prefill. `escapeHtml` usage and palette-derived colors stay exactly as they are.
+**n/a for the report body.** `lib/export.ts` accessors (`ratingAccessor`, `averageOf`, `rowsInRange`) and `buildReportHtml` are unchanged — the data they consume is identical in shape whether a day was logged manually or via prefill. `escapeHtml` usage and palette-derived colors stay exactly as they are.
 
 Honest caveats worth recording (not code changes):
 
@@ -297,7 +292,7 @@ All new _logic_ lives in `lib/storage.ts`, inside the covered set (`lib/{types,s
 - returns `undefined` when no _prior_ same-session entry exists (only a same-day entry, or only entries on/after `before`).
 - picks the **nearest prior** date, skipping intervening days that have the _other_ session only (an evening-only day between two mornings must not shadow the earlier morning).
 - respects the **strict** `before` bound: an entry dated exactly `before` is excluded (editing today never offers today).
-- narrows correctly — assert `result.session === 'evening'` then access `result.checkin.mood` inside that branch (union narrowing inside the test, never an assertion), proving the discriminant works.
+- narrows correctly — assert `result.session === 'evening'` then access `result.checkin.ratings.mood` inside that branch (union narrowing inside the test, never an assertion), proving the discriminant works.
 - skips days whose `DayEntry` has neither session (covers the `continue`).
 
 `copyableRatings` (the mitigation — test the exclusions explicitly, since they are the whole point):
@@ -314,8 +309,8 @@ const entries: Readonly<Record<IsoDate, DayEntry>> = {
   ['2026-07-15' as IsoDate]: {
     date: '2026-07-15' as IsoDate,
     evening: {
+      ratings: { mood: 4 },
       sideEffects: ['nausea'],
-      mood: 4,
       notes: 'stressful day',
       completedAt: '2026-07-15T20:00:00.000Z' as IsoTimestamp,
     },
@@ -324,8 +319,7 @@ const entries: Readonly<Record<IsoDate, DayEntry>> = {
     date: '2026-07-16' as IsoDate,
     morning: {
       doseTaken: true,
-      sleepQuality: 3,
-      wakingMood: 3,
+      ratings: { sleepQuality: 3, wakingMood: 3 },
       completedAt: '2026-07-16T07:00:00.000Z' as IsoTimestamp,
     },
   },

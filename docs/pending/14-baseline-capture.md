@@ -109,13 +109,20 @@ export function isBaselineSnapshot(value: unknown): value is BaselineSnapshot {
 }
 ```
 
-This needs an `isRatingKey` guard (the `RatingKey` union currently has no runtime list). Add a `RATING_KEYS` as-const array in `lib/types.ts` and derive the type from it, so the union and the runtime list can never drift. **This REPLACES the hand-written `RatingKey` union currently at `lib/types.ts:113-122`** — it does not sit alongside it. Landing both is a duplicate-identifier compile error:
+This needs an `isRatingKey` guard plus a combined runtime list of every rating key. As of the
+2026-07-18 "Ratings as a record" reshape, `lib/types.ts` already exports the two per-session
+runtime lists as as-const arrays (`MORNING_RATING_KEYS`, `EVENING_RATING_KEYS`), and `RatingKey`
+is already the **derived** union `MorningRatingKey | EveningRatingKey` (at `lib/types.ts:109`) —
+_not_ a hand-written string-literal union. So the only genuinely-missing pieces are the combined
+list and its guard. **Compose `RATING_KEYS` from the two existing arrays; do not redefine
+`RatingKey`** (redefining it would duplicate or silently diverge from the existing derived
+union):
 
 ```ts
-// REPLACES the hand-written `export type RatingKey = 'sleepQuality' | … | 'libido';`
-// union at lib/types.ts:113-122. Delete that union; keep only this block.
-export const RATING_KEYS = ['sleepQuality', 'wakingMood', ...EVENING_RATING_KEYS] as const;
-export type RatingKey = (typeof RATING_KEYS)[number];
+// lib/types.ts — RatingKey already exists as `MorningRatingKey | EveningRatingKey`; leave it.
+// Just add the combined runtime list, composed from the existing per-session as-const arrays.
+// (typeof RATING_KEYS)[number] is structurally identical to RatingKey, so the two can't drift.
+export const RATING_KEYS = [...MORNING_RATING_KEYS, ...EVENING_RATING_KEYS] as const;
 ```
 
 ```ts
@@ -124,7 +131,7 @@ export function isRatingKey(value: unknown): value is RatingKey {
 }
 ```
 
-Extend `isProfile` (currently at `lib/storage.ts:83`, narrowing through a `value` parameter — not a `v` alias) with one clause before it returns `true`:
+Extend `isProfile` (currently at `lib/storage.ts:91`, narrowing through a `value` parameter — not a `v` alias) with one clause before it returns `true`:
 
 ```ts
 if (value['baseline'] !== undefined && !isBaselineSnapshot(value['baseline'])) return false;
@@ -167,7 +174,7 @@ Overwrite confirmation is enforced at the UI layer (Settings), not here — `sav
 
 In `lib/export.ts`, extend `buildReportHtml(profile: Profile | null, doses, rows)`. Note the real signature: **`profile` is `Profile | null`**, so every baseline read must be null-safe — `profile?.baseline?.ratings[k]` (a bare `profile.baseline?…` is `Object is possibly 'null'` and fails `tsc`).
 
-The averages tables need a typed key at the row level, which `ScaleAverage` does not currently carry. **Add `readonly key: RatingKey` to `ScaleAverage`** (`lib/export.ts:70-74`) and populate it in `computeScaleAverages` (`lib/export.ts:76-93`, which already has `metric.key` in scope but discards it). Without this there is nothing to index `profile?.baseline?.ratings[k]` with.
+The averages tables need a typed key at the row level, which `ScaleAverage` does not currently carry. **Add `readonly key: RatingKey` to `ScaleAverage`** (`lib/export.ts:60-64`) and populate it in `computeScaleAverages` (`lib/export.ts:66-81`, which already has `metric.key` in scope but discards it). Without this there is nothing to index `profile?.baseline?.ratings[k]` with.
 
 ```ts
 interface ScaleAverage {
@@ -188,7 +195,7 @@ Then:
 
 **On the current-side averaging window (clinical must-fix, resolved with a caveat, not a hidden second window).** The current-side average is a grand mean over whichever range the report was built for (`rowsInRange`/`averageOf`), which for a newly-titrated patient can blend ramp-up days with steady-state days. The reviewer offered two fixes: (a) compute the delta against a fixed recent window (e.g. last 7 days) independent of the report range, or (b) caveat it. **We take (b).** Silently computing a _different_ window for the delta than for the rest of the report would itself be an editorial choice about which days "count" toward the "now" — exactly the interpretive judgment the mission defers to the provider — and would make the Δ column inconsistent with the averages it sits beside. The honest, in-mission move is to show the delta over the same range the provider already sees and name the caveat in the footnote above. (Per-window analysis, if wanted, belongs to a future provider-summary doc that can present multiple explicit windows side by side.)
 
-No change to `MORNING_ACCESSORS`/`EVENING_ACCESSORS` — those read `DayEntry`; baseline is read directly off the profile.
+No change to the `ratingAccessor` machinery — it reads `DayEntry`; baseline is read directly off the profile.
 
 ## Notifications
 
@@ -262,7 +269,11 @@ Coverage stays ≥ thresholds: every new pure function (`isBaselineSnapshot`, `i
 
 - **Null-safety:** all report reads now use `profile?.baseline?.ratings[k]` (`profile` is `Profile | null`).
 - **`isRecord` over cast:** `isBaselineSnapshot` uses `isRecord` for both the top-level value and `ratings`; corrected the false "matches the file idiom" claim and documented the `Object.entries` overload consequence.
-- **`RATING_KEYS` replaces the union:** stated explicitly that the new block deletes the hand-written `RatingKey` union at `lib/types.ts:113-122`.
+- **`RATING_KEYS` composes the existing arrays:** since the "Ratings as a record" reshape,
+  `RatingKey` is already the derived union `MorningRatingKey | EveningRatingKey` and the
+  per-session as-const lists exist, so this doc adds only the combined `RATING_KEYS`
+  (`[...MORNING_RATING_KEYS, ...EVENING_RATING_KEYS]`) and `isRatingKey` — `RatingKey` is left
+  untouched, not replaced.
 - **`ScaleAverage.key`:** added `readonly key: RatingKey`, populated from `metric.key` in `computeScaleAverages`, so the Δ column has a key to index.
 - Folded suggestions: `isProfile` snippet uses `value['baseline']`; `Readonly<Partial<…>>` ordering adopted; U+2212 glyph pinned in the `formatDelta` test prose.
 

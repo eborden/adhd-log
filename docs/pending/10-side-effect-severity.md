@@ -56,8 +56,7 @@ export type SideEffectReports = Readonly<Partial<Record<SideEffect, SideEffectDe
 
 ```ts
 export interface EveningCheckin {
-  readonly mood?: Rating;
-  // …unchanged rating optionals…
+  readonly ratings: Partial<Record<EveningRatingKey, Rating>>; // unchanged (keyed record)
   readonly sideEffects: SideEffectReports; // was: readonly SideEffect[]
   readonly notes?: string;
   readonly completedAt: IsoTimestamp;
@@ -171,9 +170,12 @@ function parseSideEffectReports(value: unknown): SideEffectReports | undefined {
 /** Validates AND normalizes — the returned object is always the new shape. */
 export function parseEveningCheckin(value: unknown): EveningCheckin | undefined {
   if (!isRecord(value)) return undefined;
+  // Ratings live under the nested `ratings` record (2026-07-18 "Ratings as a record" decision).
+  const ratingsRaw = value['ratings'];
+  if (!isRecord(ratingsRaw)) return undefined;
   const ratings: { [K in EveningRatingKey]?: Rating } = {};
   for (const key of EVENING_RATING_KEYS) {
-    const rating = value[key];
+    const rating = ratingsRaw[key];
     if (rating === undefined) continue;
     if (!isRating(rating)) return undefined;
     ratings[key] = rating;
@@ -185,7 +187,7 @@ export function parseEveningCheckin(value: unknown): EveningCheckin | undefined 
   const notes = value['notes'];
   if (!(notes === undefined || typeof notes === 'string')) return undefined;
   return {
-    ...ratings,
+    ratings,
     sideEffects,
     completedAt,
     ...(notes !== undefined ? { notes } : {}),

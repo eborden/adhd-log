@@ -385,8 +385,8 @@ break the RN-free Vitest specs).
   identically; a future change to daily-note export must apply the same `escapeHtml` care —
   don't reconcile the two by stripping escaping.
 
-- Averaging machinery (`averageOf`, `ratingAccessor`, `MORNING/EVENING_ACCESSORS`) is
-  untouched — weekly data is categorical and never averaged.
+- Averaging machinery (`averageOf`, `ratingAccessor`) is untouched — weekly data is categorical
+  and never averaged.
 
 ## Notifications
 

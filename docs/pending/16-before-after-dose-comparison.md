@@ -1,5 +1,3 @@
-docs/design/11-before-after-dose-comparison.md
-
 > **Status:** Proposed — pending implementation · **Priority:** P2 · Ref: analysis #10 · Panel-reviewed (4 lenses, all approve; must-fixes applied)
 
 # Before/after dose-change comparison

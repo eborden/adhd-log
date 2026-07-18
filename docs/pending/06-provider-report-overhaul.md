@@ -67,6 +67,7 @@ import type {
   DoseChange,
   EveningRatingKey,
   IsoDate,
+  MorningRatingKey,
   Profile,
   Rating,
   RatingKey,
@@ -74,9 +75,6 @@ import type {
   SideEffect,
   TrendDirection,
 } from './types';
-
-// Morning rating keys are a narrow union; EveningRatingKey already exists in lib/types.ts.
-type MorningRatingKey = 'sleepQuality' | 'wakingMood';
 
 // A computed average is either a real mean over >=1 sample, or explicitly empty.
 // No NaN, no magic -1: the empty case is a distinct variant.
@@ -206,7 +204,7 @@ Net: exactly one file with a behavioral UI change (`settings.tsx`), which keeps 
 
 ## Export / report
 
-All of the following is in `lib/export.ts`. **Inventory correction:** `MORNING_ACCESSORS` and `EVENING_ACCESSORS` are currently module-private `const`s — only `ratingAccessor` is exported. Preserved public exports are `ratingAccessor`, `averageOf`, `rowsInRange`, `buildBackup`, `parseBackup`, `exportPdfReport`.
+All of the following is in `lib/export.ts`. **Inventory:** the hand-written per-key `MORNING_ACCESSORS`/`EVENING_ACCESSORS` maps no longer exist — the single generic `ratingAccessor(session, key)` replaced them. Public exports are `ratingAccessor`, `averageOf`, `rowsInRange`, `buildBackup`, `parseBackup`, `exportPdfReport`.
 
 **Signature change (must-fix, deliberate).** The original `buildReportHtml(profile, doses, rows)` took only range-clipped `rows`. That silently breaks before/after and dose-period buckets: a 7-day report with a dose change 20 days prior still needs a 14-day "before" window, and a dose-period bucket can start weeks before the display range. Passing only `rows` would report "no data" for periods that have data on the phone — the exact failure this artifact exists to avoid. So the signature changes to take the full `entries` map plus an explicit range:
 
@@ -437,6 +435,6 @@ All new logic lives in the coverage-scoped `lib/export.ts`, so tests keep covera
 ### Data-model / migration + privacy + scope — approve-with-changes
 
 - Closed the data-flow/range gap: `buildReportHtml` now takes the full `entries` map plus explicit `rangeStart`/`rangeEnd`, and `bucketByDosePeriod`/`beforeAfterDose` read from `entries` so periods with on-device data outside the display window are never reported as empty. Signature change documented as deliberate.
-- Folded in suggestions: added an `includeNotes` toggle rather than silent default-on for previously-unexported free text; corrected the `02`/`03` cross-references; corrected the export inventory (`MORNING_ACCESSORS`/`EVENING_ACCESSORS` are module-private, only `ratingAccessor` is exported); added a one-line confirmation that `Backup`/`parseBackup` need no version bump and old backups stay importable.
+- Folded in suggestions: added an `includeNotes` toggle rather than silent default-on for previously-unexported free text; corrected the `02`/`03` cross-references; corrected the export inventory (the per-key `MORNING_ACCESSORS`/`EVENING_ACCESSORS` maps have since been removed in favor of the generic `ratingAccessor`); added a one-line confirmation that `Backup`/`parseBackup` need no version bump and old backups stay importable.
 
 All lenses approve-with-changes; must-fixes applied.

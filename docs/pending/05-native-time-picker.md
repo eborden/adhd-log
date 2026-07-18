@@ -6,7 +6,7 @@
 
 ## Problem
 
-`TimeOfDay` fully models `minute: Minute` (0–59) — see `lib/types.ts:25-30, 58-61` — and the whole
+`TimeOfDay` fully models `minute: Minute` (0–59) — see `lib/types.ts:25-30, 61-64` — and the whole
 notification path passes it through (`lib/notifications.ts:77-83` uses `time.minute` in the DAILY
 trigger). But every UI path **hardcodes `minute: 0`** and exposes only an hour `Stepper`:
 
@@ -44,7 +44,7 @@ interface TimeFieldProps {
 ```
 
 - Narrow the picker's output through the existing `isHour` / `isMinute` guards
-  (`lib/storage.ts:55-61`) before constructing a `TimeOfDay` — do **not** cast. If either guard
+  (`lib/storage.ts:59-65`) before constructing a `TimeOfDay` — do **not** cast. If either guard
   fails, ignore the change (matches the current `handleReminderChange` guard style).
 - `onboarding.tsx`: replace `morningHour`/`eveningHour` number state + the two hour Steppers with two
   `TimeField`s backed by `TimeOfDay` state (default `{ hour: 8, minute: 0 }` / `{ hour: 20, minute: 0 }`).
