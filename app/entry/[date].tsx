@@ -1,23 +1,30 @@
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { SIDE_EFFECT_LABELS } from '../../lib/schema';
+import { SIDE_EFFECT_LABELS, directionForRatingKey } from '../../lib/schema';
 import { isIsoDate, loadEntries, todayIsoDate } from '../../lib/storage';
-import { useTheme } from '../../lib/theme';
-import type { DayEntry, IsoDate, Rating } from '../../lib/types';
+import { ratingColor, useTheme } from '../../lib/theme';
+import type { DayEntry, IsoDate, Rating, RatingKey } from '../../lib/types';
 
 function RatingRow({
   label,
+  metricKey,
   value,
 }: {
   readonly label: string;
+  readonly metricKey: RatingKey;
   readonly value: Rating | undefined;
 }) {
   const theme = useTheme();
+  const direction = directionForRatingKey(metricKey);
+  const valueColor =
+    value !== undefined && direction !== undefined
+      ? ratingColor(theme, value, direction)
+      : theme.text;
   return (
     <View style={styles.row}>
       <Text style={{ color: theme.textMuted }}>{label}</Text>
-      <Text style={{ color: theme.text, fontWeight: '600' }}>{value ?? '—'}</Text>
+      <Text style={{ color: valueColor, fontWeight: '600' }}>{value ?? '—'}</Text>
     </View>
   );
 }
@@ -64,8 +71,12 @@ export default function Entry() {
         </View>
         {morning !== undefined ? (
           <>
-            <RatingRow label="Sleep quality" value={morning.sleepQuality} />
-            <RatingRow label="Waking mood" value={morning.wakingMood} />
+            <RatingRow
+              label="Sleep quality"
+              metricKey="sleepQuality"
+              value={morning.sleepQuality}
+            />
+            <RatingRow label="Waking mood" metricKey="wakingMood" value={morning.wakingMood} />
             <View style={styles.row}>
               <Text style={{ color: theme.textMuted }}>Took dose</Text>
               <Text style={{ color: theme.text, fontWeight: '600' }}>
@@ -100,13 +111,13 @@ export default function Entry() {
         </View>
         {evening !== undefined ? (
           <>
-            <RatingRow label="Mood" value={evening.mood} />
-            <RatingRow label="Focus" value={evening.focus} />
-            <RatingRow label="Impulsivity" value={evening.impulsivity} />
-            <RatingRow label="Anxiety" value={evening.anxiety} />
-            <RatingRow label="Energy" value={evening.energy} />
-            <RatingRow label="Appetite" value={evening.appetite} />
-            <RatingRow label="Libido" value={evening.libido} />
+            <RatingRow label="Mood" metricKey="mood" value={evening.mood} />
+            <RatingRow label="Focus" metricKey="focus" value={evening.focus} />
+            <RatingRow label="Impulsivity" metricKey="impulsivity" value={evening.impulsivity} />
+            <RatingRow label="Anxiety" metricKey="anxiety" value={evening.anxiety} />
+            <RatingRow label="Energy" metricKey="energy" value={evening.energy} />
+            <RatingRow label="Appetite" metricKey="appetite" value={evening.appetite} />
+            <RatingRow label="Libido" metricKey="libido" value={evening.libido} />
             {evening.sideEffects.length > 0 ? (
               <View style={styles.row}>
                 <Text style={{ color: theme.textMuted }}>Side effects</Text>

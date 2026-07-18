@@ -3,6 +3,8 @@ import {
   type EveningRatingKey,
   type Metric,
   type Profile,
+  type RatingKey,
+  type ScaleDirection,
   type SideEffect,
 } from './types';
 
@@ -123,4 +125,14 @@ export function withEveningMetricToggled(
 ): readonly EveningRatingKey[] {
   if (isEnabled) return enabled.includes(key) ? enabled : [...enabled, key];
   return enabled.filter((existing) => existing !== key);
+}
+
+type ScaleMetric = Extract<Metric, { kind: 'scale' }>;
+
+/** The good/bad direction for a scale metric's key, looked up from the schema. */
+export function directionForRatingKey(key: RatingKey): ScaleDirection | undefined {
+  const metric = [...MORNING_METRICS, ...EVENING_METRICS].find(
+    (candidate): candidate is ScaleMetric => candidate.kind === 'scale' && candidate.key === key,
+  );
+  return metric?.direction;
 }

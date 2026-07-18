@@ -4,6 +4,7 @@ import {
   EVENING_METRICS,
   MORNING_METRICS,
   SIDE_EFFECT_LABELS,
+  directionForRatingKey,
   enabledEveningMetricKeys,
   withEveningMetricToggled,
 } from '../schema';
@@ -91,6 +92,14 @@ describe('enabledEveningMetricKeys', () => {
   it('returns the profile field when set', () => {
     const profileWith = { ...profileWithout, enabledEveningMetrics: ['mood', 'libido'] as const };
     expect(enabledEveningMetricKeys(profileWith)).toEqual(['mood', 'libido']);
+  });
+});
+
+describe('directionForRatingKey', () => {
+  it('resolves the direction for every tracked scale metric', () => {
+    expect(directionForRatingKey('sleepQuality')).toBe('higher-better');
+    expect(directionForRatingKey('impulsivity')).toBe('lower-better');
+    expect(directionForRatingKey('appetite')).toBe('neutral');
   });
 });
 

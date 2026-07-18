@@ -3,6 +3,23 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Colorize scale values on the day-detail history view (2026-07-18)
+
+**Decision:** The day-detail view (`app/entry/[date].tsx`, opened by tapping a day in
+History) now colors each scale value's text the same way Trends colors its sparkline
+bars — green/red/neutral via `lib/theme.ts`'s `ratingColor`, based on the metric's
+good/bad direction (`higher-better`/`lower-better`/`neutral`).
+
+- Added `lib/schema.ts#directionForRatingKey(key)`: looks up a scale metric's direction
+  by key from `MORNING_METRICS`/`EVENING_METRICS`, so the direction data stays declared
+  once in the schema rather than duplicated in the view.
+- `RatingRow` (local to `entry/[date].tsx`) now takes a `metricKey: RatingKey` prop
+  alongside `label`/`value`, computes direction from it, and colors the value text
+  accordingly; falls back to plain text color when there's no value or no resolvable
+  direction.
+- Scoped to this one view — the History tab's day list and the PDF report's tables are
+  unaffected.
+
 ## Trends/reports reflect data, not the Settings toggle (2026-07-18)
 
 **Problem:** Right after making evening metrics configurable (below), Trends and the PDF
