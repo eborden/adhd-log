@@ -3,6 +3,28 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Trends/reports reflect data, not the Settings toggle (2026-07-18)
+
+**Problem:** Right after making evening metrics configurable (below), Trends and the PDF
+report's "Evening averages" also respected the Settings on/off state — hiding a metric's
+sparkline/average whenever it was currently toggled off, even if it had weeks of
+historical data. That's backwards for a review page: turning a metric off should only
+affect what the check-in _asks about going forward_, not what the history views show.
+
+**Decision:** Trends and the report's "Evening averages" section now filter by whether a
+metric has _any data in the currently selected range_, not by the Settings toggle.
+
+- `app/(tabs)/trends.tsx` no longer loads `Profile` at all — it checks
+  `rows.some((row) => accessor(row) !== undefined)` per metric instead.
+- `lib/export.ts`'s `buildReportHtml` drops evening metrics with a `null` average
+  (no data in range) from the table entirely, rather than showing them with a `'—'`.
+- Morning metrics and the report's "Daily log" table are unaffected — out of scope.
+- `app/checkin.tsx`/`app/(tabs)/settings.tsx` are unaffected — the Settings toggle still
+  controls what the daily check-in form asks about.
+
+This supersedes the "Trends hides a metric's sparkline entirely while it's disabled"
+bullet in the entry below — that's no longer how Trends decides what to show.
+
 ## Configurable evening check-in metrics (2026-07-18)
 
 **Problem:** The evening check-in forced 7 required mood/symptom ratings (mood, focus,

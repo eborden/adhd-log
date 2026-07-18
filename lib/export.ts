@@ -122,7 +122,9 @@ export function buildReportHtml(
   rows: readonly DayEntry[],
 ): string {
   const morningAverages = computeScaleAverages(MORNING_METRICS, MORNING_ACCESSORS, rows);
-  const eveningAverages = computeScaleAverages(EVENING_METRICS, EVENING_ACCESSORS, rows);
+  const eveningAverages = computeScaleAverages(EVENING_METRICS, EVENING_ACCESSORS, rows).filter(
+    (average) => average.average !== null,
+  );
 
   const header = profile
     ? `<h1>${escapeHtml(profile.medName)}</h1>

@@ -103,7 +103,7 @@ describe('buildReportHtml', () => {
     expect(html).toContain('Nausea, Headache');
   });
 
-  it('reports partial averages for a metric some days omitted, and — where a metric has no data', () => {
+  it('reports partial averages for a metric some days omitted, and omits a metric with no data in range at all', () => {
     const rowMoodFocusOnly: DayEntry = {
       date: DAY_1,
       evening: {
@@ -130,8 +130,8 @@ describe('buildReportHtml', () => {
     expect(html).toContain('<td>Focus / attention</td><td>4.0</td>');
     // libido answered only on DAY_2: average is still 4.0, just from one day
     expect(html).toContain('<td>Libido</td><td>4.0</td>');
-    // anxiety never answered on either day: no data in range
-    expect(html).toContain('<td>Anxiety / irritability</td><td>—</td>');
+    // anxiety never answered on either day: omitted entirely, not shown with a dash
+    expect(html).not.toContain('Anxiety / irritability');
   });
 
   it('escapes HTML in free-text fields', () => {
