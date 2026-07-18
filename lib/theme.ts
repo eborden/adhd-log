@@ -1,6 +1,13 @@
 import { useColorScheme } from 'react-native';
 import type { TextStyle, ViewStyle } from 'react-native';
-import { fontSize, fontWeight, letterSpacing, palette, shadowPrimitive } from './tokens';
+import {
+  fontSize,
+  fontWeight,
+  letterSpacing,
+  lineHeight,
+  palette,
+  shadowPrimitive,
+} from './tokens';
 import type { Rating, ScaleDirection } from './types';
 
 /**
@@ -70,11 +77,13 @@ export function useTheme(): Theme {
 export const typography = {
   display: {
     fontSize: fontSize.display,
+    lineHeight: lineHeight.display,
     fontWeight: fontWeight.heavy,
     letterSpacing: letterSpacing.tight,
   },
   title: {
     fontSize: fontSize.xxl,
+    lineHeight: lineHeight.xxl,
     fontWeight: fontWeight.bold,
     letterSpacing: letterSpacing.snug,
   },
@@ -86,23 +95,28 @@ export const typography = {
   },
   cardTitle: {
     fontSize: fontSize.xl,
+    lineHeight: lineHeight.xl,
     fontWeight: fontWeight.bold,
     letterSpacing: letterSpacing.snug,
   },
   body: {
     fontSize: fontSize.md,
+    lineHeight: lineHeight.md,
     fontWeight: fontWeight.medium,
   },
   bodyStrong: {
     fontSize: fontSize.md,
+    lineHeight: lineHeight.md,
     fontWeight: fontWeight.semibold,
   },
   caption: {
     fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
     fontWeight: fontWeight.medium,
   },
   button: {
     fontSize: fontSize.lg,
+    lineHeight: lineHeight.lg,
     fontWeight: fontWeight.bold,
     letterSpacing: letterSpacing.wide,
   },

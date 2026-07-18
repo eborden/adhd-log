@@ -42,7 +42,7 @@ export function Button({
 
 const styles = StyleSheet.create({
   button: {
-    paddingVertical: space.lg,
+    paddingVertical: space.md,
     paddingHorizontal: space.xl,
     borderRadius: radius.md,
     alignItems: 'center',

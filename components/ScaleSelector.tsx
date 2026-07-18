@@ -72,7 +72,9 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    aspectRatio: 1,
+    // Wider than tall so the row isn't so chunky, while staying well above the
+    // 44pt minimum tap target at any phone width.
+    aspectRatio: 1.3,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',

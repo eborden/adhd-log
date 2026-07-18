@@ -63,13 +63,23 @@ export const radius = {
 } as const;
 
 export const fontSize = {
-  xs: 12,
-  sm: 13,
-  md: 15,
-  lg: 16,
-  xl: 17,
-  xxl: 22,
+  xs: 13,
+  sm: 14,
+  md: 16,
+  lg: 17,
+  xl: 19,
+  xxl: 24,
   display: 34,
+} as const;
+
+/** Line heights paired with the matching `fontSize` step, for legible multi-line text. */
+export const lineHeight = {
+  sm: 20,
+  md: 23,
+  lg: 24,
+  xl: 26,
+  xxl: 30,
+  display: 40,
 } as const;
 
 /** String literals so they satisfy React Native's `fontWeight` without importing RN. */
