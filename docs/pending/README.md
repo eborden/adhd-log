@@ -24,7 +24,7 @@ Landed plans move to `docs/DECISIONS.md` and are struck through here.
 | 01  | ~~Extract `restoreBackup` + fix dose-restore data loss~~ ✅ landed (see DECISIONS) | Small        | Fixed a confirmed data-loss bug in the disaster-recovery path                                    |
 | 02  | ~~Schema-drive the check-in write path~~ ✅ landed (see DECISIONS)                 | Small–Medium | Made the "add a metric in schema.ts only" contract actually true; closed a silent data-drop hole |
 | 03  | ~~Tolerant entry parsing + no destructive overwrite~~ ✅ landed (see DECISIONS)    | Medium       | Protects months of accreting data from total loss on one bad record                              |
-| 04  | [Extract a `<DoseInput>` component](04-dose-input-component.md)                    | Small        | Removes the only real verbatim cross-screen UI duplication                                       |
+| 04  | ~~Extract a `<DoseInput>` component~~ ✅ landed (see DECISIONS)                    | Small        | Removed the only real verbatim cross-screen UI duplication                                       |
 | 05  | [Add a native time picker](05-native-time-picker.md)                               | Small        | Makes reminder minutes (already modeled) reachable; the one justified new dependency             |
 
 ## User-value / features

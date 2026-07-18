@@ -3,6 +3,29 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Extract a shared `<DoseInput>` component (2026-07-18)
+
+**Problem:** The dose amount field + unit-chip picker was copy-pasted almost verbatim across
+`app/onboarding.tsx` and `app/(tabs)/settings.tsx` — two JSX blocks, two identical style blocks
+(`doseRow`/`amountInput`/`unitRow`/`unitChip`), and two copies of
+`const DOSE_UNITS = ['mg','mcg','mL']` to keep in sync by hand. The only genuine verbatim
+cross-screen UI duplication in the app.
+
+**Decision:** Add `components/DoseInput.tsx` — a thin, controlled, presentational primitive (in
+the mold of `Toggle`/`Stepper`) that owns the amount `TextInput`, the unit chips, `DOSE_UNITS`,
+and the shared styles. Props: `amount` (raw text, parent parses), `unit`, `onAmountChange`,
+`onUnitChange`, optional `amountPlaceholder`. Both screens render `<DoseInput …>` and keep only
+their own surrounding margin (a `doseField` wrapper: onboarding `space.xl`, settings `space.md`),
+so layout is unchanged.
+
+- One intentional standardization: the unit-chip label now uses `typography.body` in both places
+  (settings previously used `typography.caption`) — a deliberate, tiny visual change.
+- Scope held: no speculative `<SegmentedControl>` abstraction, no UI kit (would collide with the
+  `tokens.ts → theme.ts` system), and the correctly co-located single-use helpers (`SessionCard`,
+  `HistoryRow`, `RatingRow`, `DetailRow`) were left where they live.
+
+Supersedes and closes `docs/pending/04-dose-input-component.md`.
+
 ## Tolerant entry parsing + no destructive overwrite (2026-07-18)
 
 **Problem:** For an app whose value is data that accretes over weeks, the read path could turn
