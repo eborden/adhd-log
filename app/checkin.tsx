@@ -29,10 +29,14 @@ interface Draft {
   readonly notes: string;
 }
 
+// A typical night, not the stepper's floor — starting at 0 meant a normal
+// 7-8 hour night took a dozen-plus taps to reach.
+const DEFAULT_SLEEP_HOURS = 7;
+
 const EMPTY_DRAFT: Draft = {
   doseTaken: false,
   ratings: {},
-  sleepHours: undefined,
+  sleepHours: DEFAULT_SLEEP_HOURS,
   sideEffects: [],
   notes: '',
 };
@@ -41,7 +45,7 @@ function draftFromMorning(checkin: MorningCheckin): Draft {
   return {
     doseTaken: checkin.doseTaken,
     ratings: { sleepQuality: checkin.sleepQuality, wakingMood: checkin.wakingMood },
-    sleepHours: checkin.sleepHours,
+    sleepHours: checkin.sleepHours ?? DEFAULT_SLEEP_HOURS,
     sideEffects: [],
     notes: '',
   };

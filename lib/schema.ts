@@ -14,7 +14,7 @@ export const MORNING_METRICS: readonly Metric[] = [
     high: 'Great',
     direction: 'higher-better',
   },
-  { kind: 'stepper', key: 'sleepHours', label: 'Hours slept', min: 0, max: 14, step: 0.5 },
+  { kind: 'stepper', key: 'sleepHours', label: 'Hours slept', min: 0, max: 14, step: 1 },
   {
     kind: 'scale',
     key: 'wakingMood',
