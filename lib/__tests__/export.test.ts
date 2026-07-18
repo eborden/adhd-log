@@ -103,6 +103,37 @@ describe('buildReportHtml', () => {
     expect(html).toContain('Nausea, Headache');
   });
 
+  it('reports partial averages for a metric some days omitted, and — where a metric has no data', () => {
+    const rowMoodFocusOnly: DayEntry = {
+      date: DAY_1,
+      evening: {
+        mood: 5,
+        focus: 5,
+        sideEffects: [],
+        completedAt: isoTimestampNow(),
+      },
+    };
+    const rowWithLibido: DayEntry = {
+      date: DAY_2,
+      evening: {
+        mood: 3,
+        focus: 3,
+        libido: 4,
+        sideEffects: [],
+        completedAt: isoTimestampNow(),
+      },
+    };
+    const html = buildReportHtml(null, [], [rowMoodFocusOnly, rowWithLibido]);
+
+    // mood/focus answered both days: (5+3)/2 = 4.0
+    expect(html).toContain('<td>Overall mood today</td><td>4.0</td>');
+    expect(html).toContain('<td>Focus / attention</td><td>4.0</td>');
+    // libido answered only on DAY_2: average is still 4.0, just from one day
+    expect(html).toContain('<td>Libido</td><td>4.0</td>');
+    // anxiety never answered on either day: no data in range
+    expect(html).toContain('<td>Anxiety / irritability</td><td>—</td>');
+  });
+
   it('escapes HTML in free-text fields', () => {
     const profile: Profile = {
       medName: '<script>alert(1)</script>' as Profile['medName'],

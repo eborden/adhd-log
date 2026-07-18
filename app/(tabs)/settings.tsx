@@ -13,7 +13,13 @@ import {
 } from '../../lib/export';
 import { requestNotificationPermissions, scheduleReminders } from '../../lib/notifications';
 import {
+  EVENING_METRICS,
+  enabledEveningMetricKeys,
+  withEveningMetricToggled,
+} from '../../lib/schema';
+import {
   appendDoseChange,
+  isEveningRatingKey,
   isHour,
   lastNDates,
   loadDoseChanges,
@@ -250,6 +256,29 @@ export default function Settings() {
           handleReminderChange('evening', hour);
         }}
       />
+
+      <Text style={[styles.section, { color: theme.text }]}>Evening check-in</Text>
+      <Text style={{ color: theme.textMuted, marginBottom: 12 }}>
+        Choose which ratings show up in your evening check-in.
+      </Text>
+      {EVENING_METRICS.map((metric) => {
+        if (metric.kind !== 'scale' || !isEveningRatingKey(metric.key)) return null;
+        const key = metric.key;
+        const enabledKeys = enabledEveningMetricKeys(profile);
+        return (
+          <Toggle
+            key={key}
+            label={metric.label}
+            value={enabledKeys.includes(key)}
+            onChange={(isEnabled) => {
+              updateProfile({
+                ...profile,
+                enabledEveningMetrics: withEveningMetricToggled(enabledKeys, key, isEnabled),
+              });
+            }}
+          />
+        );
+      })}
 
       <Text style={[styles.section, { color: theme.text }]}>Privacy</Text>
       <Toggle

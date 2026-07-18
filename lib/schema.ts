@@ -1,4 +1,10 @@
-import { SIDE_EFFECTS, type Metric, type SideEffect } from './types';
+import {
+  SIDE_EFFECTS,
+  type EveningRatingKey,
+  type Metric,
+  type Profile,
+  type SideEffect,
+} from './types';
 
 /**
  * Single source of truth for check-in fields. Both check-in sessions render
@@ -97,3 +103,24 @@ export const SIDE_EFFECT_LABELS: Readonly<Record<SideEffect, string>> = {
   racingHeart: 'Racing heart',
   other: 'Other',
 };
+
+/** Evening ratings active out of the box — the rest stay toggleable in Settings. */
+export const DEFAULT_ENABLED_EVENING_METRICS: readonly EveningRatingKey[] = [
+  'mood',
+  'focus',
+  'energy',
+  'anxiety',
+] as const;
+
+export function enabledEveningMetricKeys(profile: Profile | null): readonly EveningRatingKey[] {
+  return profile?.enabledEveningMetrics ?? DEFAULT_ENABLED_EVENING_METRICS;
+}
+
+export function withEveningMetricToggled(
+  enabled: readonly EveningRatingKey[],
+  key: EveningRatingKey,
+  isEnabled: boolean,
+): readonly EveningRatingKey[] {
+  if (isEnabled) return enabled.includes(key) ? enabled : [...enabled, key];
+  return enabled.filter((existing) => existing !== key);
+}

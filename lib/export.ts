@@ -12,6 +12,7 @@ import {
 import type {
   DayEntry,
   DoseChange,
+  EveningRatingKey,
   IsoDate,
   IsoTimestamp,
   Metric,
@@ -28,8 +29,6 @@ import type {
 // ---------------------------------------------------------------------------
 
 type MorningRatingKey = 'sleepQuality' | 'wakingMood';
-type EveningRatingKey =
-  'mood' | 'focus' | 'impulsivity' | 'anxiety' | 'energy' | 'appetite' | 'libido';
 
 const MORNING_ACCESSORS: Readonly<Record<MorningRatingKey, (row: DayEntry) => Rating | undefined>> =
   {

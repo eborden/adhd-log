@@ -1,7 +1,8 @@
 # CLAUDE.md — adhd-log
 
 Working contract for this repo. These rules are non-negotiable; the full rationale lives in
-[`docs/PLANNING-v0.md`](docs/PLANNING-v0.md).
+[`docs/PLANNING-v0.md`](docs/PLANNING-v0.md). `PLANNING-v0.md` is frozen — decisions made
+since are logged in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 ## What this is
 

@@ -10,6 +10,8 @@ import {
   isDayEntry,
   isDoseChangeList,
   isEntries,
+  isEveningCheckin,
+  isEveningRatingKey,
   isIsoDate,
   isIsoTimestamp,
   isMedName,
@@ -79,6 +81,16 @@ describe('isSideEffect', () => {
   });
 });
 
+describe('isEveningRatingKey', () => {
+  it('accepts a known evening rating key and rejects everything else', () => {
+    expect(isEveningRatingKey('mood')).toBe(true);
+    expect(isEveningRatingKey('libido')).toBe(true);
+    expect(isEveningRatingKey('sleepQuality')).toBe(false);
+    expect(isEveningRatingKey('bogus')).toBe(false);
+    expect(isEveningRatingKey(1)).toBe(false);
+  });
+});
+
 describe('isIsoDate / isIsoTimestamp / isMedName', () => {
   it('validates well-formed values', () => {
     expect(isIsoDate('2026-07-17')).toBe(true);
@@ -115,6 +127,22 @@ describe('isProfile', () => {
     expect(isProfile('profile')).toBe(false);
     expect(isProfile([])).toBe(false);
   });
+
+  it('accepts a profile with a valid enabledEveningMetrics array', () => {
+    expect(isProfile({ ...VALID_PROFILE, enabledEveningMetrics: ['mood', 'libido'] })).toBe(true);
+  });
+
+  it('accepts a profile without enabledEveningMetrics (falls back to defaults elsewhere)', () => {
+    expect(isProfile(VALID_PROFILE)).toBe(true);
+  });
+
+  it('rejects a profile whose enabledEveningMetrics contains a non-evening key', () => {
+    expect(isProfile({ ...VALID_PROFILE, enabledEveningMetrics: ['sleepQuality'] })).toBe(false);
+  });
+
+  it('rejects a profile whose enabledEveningMetrics contains a non-string element', () => {
+    expect(isProfile({ ...VALID_PROFILE, enabledEveningMetrics: ['mood', 1] })).toBe(false);
+  });
 });
 
 describe('isDayEntry / isEntries', () => {
@@ -144,6 +172,35 @@ describe('isDayEntry / isEntries', () => {
 
   it('accepts an empty entries map', () => {
     expect(isEntries({})).toBe(true);
+  });
+});
+
+describe('isEveningCheckin', () => {
+  it('accepts a checkin with only some ratings present', () => {
+    expect(
+      isEveningCheckin({
+        mood: 4,
+        focus: 3,
+        sideEffects: [],
+        completedAt: '2026-07-17T20:00:00.000Z',
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts a checkin with no ratings at all', () => {
+    expect(isEveningCheckin({ sideEffects: [], completedAt: '2026-07-17T20:00:00.000Z' })).toBe(
+      true,
+    );
+  });
+
+  it('rejects a checkin where a present rating is invalid', () => {
+    expect(
+      isEveningCheckin({
+        mood: 9,
+        sideEffects: [],
+        completedAt: '2026-07-17T20:00:00.000Z',
+      }),
+    ).toBe(false);
   });
 });
 

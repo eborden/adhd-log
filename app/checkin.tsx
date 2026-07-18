@@ -6,8 +6,16 @@ import { Chips } from '../components/Chips';
 import { ScaleSelector } from '../components/ScaleSelector';
 import { Stepper } from '../components/Stepper';
 import { Toggle } from '../components/Toggle';
-import { EVENING_METRICS, MORNING_METRICS } from '../lib/schema';
-import { isIsoDate, isoTimestampNow, loadEntries, saveCheckin, todayIsoDate } from '../lib/storage';
+import { EVENING_METRICS, MORNING_METRICS, enabledEveningMetricKeys } from '../lib/schema';
+import {
+  isEveningRatingKey,
+  isIsoDate,
+  isoTimestampNow,
+  loadEntries,
+  loadProfile,
+  saveCheckin,
+  todayIsoDate,
+} from '../lib/storage';
 import { useTheme } from '../lib/theme';
 import { assertNever } from '../lib/types';
 import type {
@@ -15,6 +23,7 @@ import type {
   IsoDate,
   Metric,
   MorningCheckin,
+  Profile,
   Rating,
   RatingKey,
   Session,
@@ -55,13 +64,13 @@ function draftFromEvening(checkin: EveningCheckin): Draft {
   return {
     doseTaken: false,
     ratings: {
-      mood: checkin.mood,
-      focus: checkin.focus,
-      impulsivity: checkin.impulsivity,
-      anxiety: checkin.anxiety,
-      energy: checkin.energy,
-      appetite: checkin.appetite,
-      libido: checkin.libido,
+      ...(checkin.mood !== undefined ? { mood: checkin.mood } : {}),
+      ...(checkin.focus !== undefined ? { focus: checkin.focus } : {}),
+      ...(checkin.impulsivity !== undefined ? { impulsivity: checkin.impulsivity } : {}),
+      ...(checkin.anxiety !== undefined ? { anxiety: checkin.anxiety } : {}),
+      ...(checkin.energy !== undefined ? { energy: checkin.energy } : {}),
+      ...(checkin.appetite !== undefined ? { appetite: checkin.appetite } : {}),
+      ...(checkin.libido !== undefined ? { libido: checkin.libido } : {}),
     },
     sleepHours: undefined,
     sideEffects: checkin.sideEffects,
@@ -78,10 +87,10 @@ export default function Checkin() {
   const params = useLocalSearchParams<{ session?: string; date?: string }>();
   const session: Session = isSession(params.session) ? params.session : 'morning';
   const date: IsoDate = isIsoDate(params.date) ? params.date : todayIsoDate();
-  const metrics = session === 'morning' ? MORNING_METRICS : EVENING_METRICS;
 
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
     loadEntries()
@@ -96,6 +105,23 @@ export default function Checkin() {
       })
       .catch(() => undefined);
   }, [date, session]);
+
+  useEffect(() => {
+    loadProfile()
+      .then(setProfile)
+      .catch(() => undefined);
+  }, []);
+
+  const enabledKeys = enabledEveningMetricKeys(profile);
+  const metrics =
+    session === 'morning'
+      ? MORNING_METRICS
+      : EVENING_METRICS.filter(
+          (metric) =>
+            metric.kind !== 'scale' ||
+            !isEveningRatingKey(metric.key) ||
+            enabledKeys.includes(metric.key),
+        );
 
   const requiredKeys = metrics
     .filter((metric) => metric.kind === 'scale')
@@ -116,29 +142,20 @@ export default function Checkin() {
       };
       await saveCheckin(date, { session: 'morning', checkin });
     } else {
-      const { mood, focus, impulsivity, anxiety, energy, appetite, libido } = draft.ratings;
-      if (
-        mood === undefined ||
-        focus === undefined ||
-        impulsivity === undefined ||
-        anxiety === undefined ||
-        energy === undefined ||
-        appetite === undefined ||
-        libido === undefined
-      ) {
-        return;
-      }
+      if (!isComplete) return;
       const trimmedNotes = draft.notes.trim();
       const checkin: EveningCheckin = {
-        mood,
-        focus,
-        impulsivity,
-        anxiety,
-        energy,
-        appetite,
-        libido,
         sideEffects: draft.sideEffects,
         completedAt: isoTimestampNow(),
+        ...(draft.ratings.mood !== undefined ? { mood: draft.ratings.mood } : {}),
+        ...(draft.ratings.focus !== undefined ? { focus: draft.ratings.focus } : {}),
+        ...(draft.ratings.impulsivity !== undefined
+          ? { impulsivity: draft.ratings.impulsivity }
+          : {}),
+        ...(draft.ratings.anxiety !== undefined ? { anxiety: draft.ratings.anxiety } : {}),
+        ...(draft.ratings.energy !== undefined ? { energy: draft.ratings.energy } : {}),
+        ...(draft.ratings.appetite !== undefined ? { appetite: draft.ratings.appetite } : {}),
+        ...(draft.ratings.libido !== undefined ? { libido: draft.ratings.libido } : {}),
         ...(trimmedNotes !== '' ? { notes: trimmedNotes } : {}),
       };
       await saveCheckin(date, { session: 'evening', checkin });

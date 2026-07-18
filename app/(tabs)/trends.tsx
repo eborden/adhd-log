@@ -2,16 +2,18 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { ratingAccessor, rowsInRange } from '../../lib/export';
-import { EVENING_METRICS, MORNING_METRICS } from '../../lib/schema';
+import { EVENING_METRICS, MORNING_METRICS, enabledEveningMetricKeys } from '../../lib/schema';
 import {
   doseChangeMarkers,
+  isEveningRatingKey,
   lastNDates,
   loadDoseChanges,
   loadEntries,
+  loadProfile,
   todayIsoDate,
 } from '../../lib/storage';
 import { ratingColor, useTheme } from '../../lib/theme';
-import type { DayEntry, IsoDate, Metric, Session } from '../../lib/types';
+import type { DayEntry, IsoDate, Metric, Profile, Session } from '../../lib/types';
 
 const RANGE_OPTIONS = [7, 14, 30] as const;
 
@@ -19,17 +21,6 @@ interface TaggedMetric {
   readonly metric: Metric;
   readonly session: Session;
 }
-
-const SCALE_METRICS: readonly TaggedMetric[] = [
-  ...MORNING_METRICS.filter((metric) => metric.kind === 'scale').map((metric) => ({
-    metric,
-    session: 'morning' as const,
-  })),
-  ...EVENING_METRICS.filter((metric) => metric.kind === 'scale').map((metric) => ({
-    metric,
-    session: 'evening' as const,
-  })),
-];
 
 function barHeight(rating: number | undefined): number {
   if (rating === undefined) return 4;
@@ -42,19 +33,34 @@ export default function Trends() {
   const [dates, setDates] = useState<readonly IsoDate[]>([]);
   const [rows, setRows] = useState<readonly DayEntry[]>([]);
   const [markers, setMarkers] = useState<ReadonlySet<IsoDate>>(new Set());
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   const refresh = useCallback((): void => {
-    Promise.all([loadEntries(), loadDoseChanges()])
-      .then(([entries, doses]) => {
+    Promise.all([loadEntries(), loadDoseChanges(), loadProfile()])
+      .then(([entries, doses, loadedProfile]) => {
         const rangeDates = lastNDates(range, todayIsoDate());
         setDates(rangeDates);
         setRows(rowsInRange(entries, rangeDates));
         setMarkers(doseChangeMarkers(doses, rangeDates));
+        setProfile(loadedProfile);
       })
       .catch(() => undefined);
   }, [range]);
 
   useFocusEffect(refresh);
+
+  const enabledKeys = enabledEveningMetricKeys(profile);
+  const visibleScaleMetrics: readonly TaggedMetric[] = [
+    ...MORNING_METRICS.filter((metric) => metric.kind === 'scale').map((metric) => ({
+      metric,
+      session: 'morning' as const,
+    })),
+    ...EVENING_METRICS.filter(
+      (metric) =>
+        metric.kind === 'scale' &&
+        (!isEveningRatingKey(metric.key) || enabledKeys.includes(metric.key)),
+    ).map((metric) => ({ metric, session: 'evening' as const })),
+  ];
 
   return (
     <ScrollView
@@ -85,7 +91,7 @@ export default function Trends() {
         })}
       </View>
 
-      {SCALE_METRICS.map(({ metric, session }) => {
+      {visibleScaleMetrics.map(({ metric, session }) => {
         if (metric.kind !== 'scale') return null;
         const accessor = ratingAccessor(session, metric.key);
         return (

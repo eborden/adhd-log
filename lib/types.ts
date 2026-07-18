@@ -44,6 +44,17 @@ export const SIDE_EFFECTS = [
 ] as const;
 export type SideEffect = (typeof SIDE_EFFECTS)[number];
 
+export const EVENING_RATING_KEYS = [
+  'mood',
+  'focus',
+  'impulsivity',
+  'anxiety',
+  'energy',
+  'appetite',
+  'libido',
+] as const;
+export type EveningRatingKey = (typeof EVENING_RATING_KEYS)[number];
+
 export interface TimeOfDay {
   readonly hour: Hour;
   readonly minute: Minute;
@@ -61,6 +72,7 @@ export interface Profile {
   readonly morningReminder: TimeOfDay;
   readonly eveningReminder: TimeOfDay;
   readonly lockEnabled: boolean;
+  readonly enabledEveningMetrics?: readonly EveningRatingKey[];
   readonly createdAt: IsoTimestamp;
 }
 
@@ -79,13 +91,13 @@ export interface MorningCheckin {
 }
 
 export interface EveningCheckin {
-  readonly mood: Rating;
-  readonly focus: Rating;
-  readonly impulsivity: Rating;
-  readonly anxiety: Rating;
-  readonly energy: Rating;
-  readonly appetite: Rating;
-  readonly libido: Rating;
+  readonly mood?: Rating;
+  readonly focus?: Rating;
+  readonly impulsivity?: Rating;
+  readonly anxiety?: Rating;
+  readonly energy?: Rating;
+  readonly appetite?: Rating;
+  readonly libido?: Rating;
   readonly sideEffects: readonly SideEffect[];
   readonly notes?: string;
   readonly completedAt: IsoTimestamp;

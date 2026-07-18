@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  EVENING_RATING_KEYS,
   HOURS,
   MINUTES,
   SIDE_EFFECTS,
@@ -8,6 +9,7 @@ import {
   type DoseChange,
   type DoseUnit,
   type EveningCheckin,
+  type EveningRatingKey,
   type Hour,
   type IsoDate,
   type IsoTimestamp,
@@ -66,6 +68,10 @@ export function isSideEffect(value: unknown): value is SideEffect {
   return typeof value === 'string' && (SIDE_EFFECTS as readonly string[]).includes(value);
 }
 
+export function isEveningRatingKey(value: unknown): value is EveningRatingKey {
+  return typeof value === 'string' && (EVENING_RATING_KEYS as readonly string[]).includes(value);
+}
+
 export function isTimeOfDay(value: unknown): value is TimeOfDay {
   return isRecord(value) && isHour(value['hour']) && isMinute(value['minute']);
 }
@@ -75,15 +81,22 @@ export function isDose(value: unknown): value is Dose {
 }
 
 export function isProfile(value: unknown): value is Profile {
+  if (
+    !isRecord(value) ||
+    !isMedName(value['medName']) ||
+    !isIsoDate(value['startDate']) ||
+    !isDose(value['currentDose']) ||
+    !isTimeOfDay(value['morningReminder']) ||
+    !isTimeOfDay(value['eveningReminder']) ||
+    typeof value['lockEnabled'] !== 'boolean' ||
+    !isIsoTimestamp(value['createdAt'])
+  ) {
+    return false;
+  }
+  const enabledEveningMetrics = value['enabledEveningMetrics'];
   return (
-    isRecord(value) &&
-    isMedName(value['medName']) &&
-    isIsoDate(value['startDate']) &&
-    isDose(value['currentDose']) &&
-    isTimeOfDay(value['morningReminder']) &&
-    isTimeOfDay(value['eveningReminder']) &&
-    typeof value['lockEnabled'] === 'boolean' &&
-    isIsoTimestamp(value['createdAt'])
+    enabledEveningMetrics === undefined ||
+    (isUnknownArray(enabledEveningMetrics) && enabledEveningMetrics.every(isEveningRatingKey))
   );
 }
 
@@ -109,20 +122,11 @@ export function isMorningCheckin(value: unknown): value is MorningCheckin {
   return sleepHours === undefined || typeof sleepHours === 'number';
 }
 
-const EVENING_RATING_KEYS = [
-  'mood',
-  'focus',
-  'impulsivity',
-  'anxiety',
-  'energy',
-  'appetite',
-  'libido',
-] as const;
-
 export function isEveningCheckin(value: unknown): value is EveningCheckin {
   if (!isRecord(value)) return false;
   for (const key of EVENING_RATING_KEYS) {
-    if (!isRating(value[key])) return false;
+    const rating = value[key];
+    if (!(rating === undefined || isRating(rating))) return false;
   }
   const sideEffects = value['sideEffects'];
   if (!isUnknownArray(sideEffects) || !sideEffects.every(isSideEffect)) return false;
