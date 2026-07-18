@@ -6,14 +6,18 @@ import {
   buildBackup,
   buildReportHtml,
   collectNotes,
+  computeTrend,
   exportJsonBackup,
   exportPdfReport,
   importJsonBackup,
+  metricAverage,
   parseBackup,
   ratingAccessor,
   rowsInRange,
   severityRunLength,
   sideEffectSummary,
+  toMetricAverage,
+  type MetricAverage,
   type ReportOptions,
 } from '../export';
 import { isoTimestampNow } from '../storage';
@@ -33,6 +37,13 @@ function morningRow(date: IsoDate, sleepQuality: Rating): DayEntry {
       doseTaken: true,
       completedAt: isoTimestampNow(),
     },
+  };
+}
+
+function eveningRatingRow(date: IsoDate, mood: Rating, anxiety: Rating): DayEntry {
+  return {
+    date,
+    evening: { ratings: { mood, anxiety }, sideEffects: {}, completedAt: isoTimestampNow() },
   };
 }
 
@@ -99,6 +110,59 @@ describe('ratingAccessor', () => {
   it('reads undefined for a key that does not belong to the session', () => {
     // 'mood' is an evening key; asking for it in the morning session yields undefined.
     expect(ratingAccessor('morning', 'mood')(morningRow(DAY_1, 5))).toBeUndefined();
+  });
+});
+
+describe('toMetricAverage', () => {
+  it('maps a null mean or zero samples to empty, and a real mean to value', () => {
+    expect(toMetricAverage(null, 0)).toEqual({ kind: 'empty' });
+    expect(toMetricAverage(3.2, 0)).toEqual({ kind: 'empty' });
+    expect(toMetricAverage(3.2, 4)).toEqual({ kind: 'value', mean: 3.2, n: 4 });
+  });
+});
+
+describe('metricAverage', () => {
+  it('counts samples and means them, skipping missing days', () => {
+    const rows: readonly DayEntry[] = [morningRow(DAY_1, 2), { date: DAY_2 }, morningRow(DAY_3, 4)];
+    expect(metricAverage(rows, (row) => row.morning?.ratings.sleepQuality)).toEqual({
+      kind: 'value',
+      mean: 3,
+      n: 2,
+    });
+  });
+
+  it('is empty when no row has a value', () => {
+    expect(metricAverage([{ date: DAY_1 }], (row) => row.morning?.ratings.sleepQuality)).toEqual({
+      kind: 'empty',
+    });
+  });
+});
+
+describe('computeTrend', () => {
+  const val = (mean: number, n: number): MetricAverage => ({ kind: 'value', mean, n });
+
+  it('reports a measured up trend when both halves clear the sample floor and deadband', () => {
+    const trend = computeTrend(val(2.8, 4), val(3.6, 4));
+    expect(trend.kind).toBe('measured');
+    if (trend.kind === 'measured') {
+      expect(trend.direction).toBe('up');
+      expect(trend.firstHalf).toBe(2.8);
+      expect(trend.secondHalf).toBe(3.6);
+    }
+  });
+
+  it('reports flat when the delta is within the deadband', () => {
+    const trend = computeTrend(val(3.0, 5), val(3.2, 5));
+    expect(trend.kind === 'measured' && trend.direction).toBe('flat');
+  });
+
+  it('is insufficient when a half is empty', () => {
+    expect(computeTrend({ kind: 'empty' }, val(3.6, 4))).toEqual({ kind: 'insufficient' });
+  });
+
+  it('is insufficient when a half has fewer than MIN_HALF_SAMPLES, even with a real delta', () => {
+    // n=2 each, delta 2.0 well past the deadband — still insufficient (the sample floor, not the deadband).
+    expect(computeTrend(val(2, 2), val(4, 2))).toEqual({ kind: 'insufficient' });
   });
 });
 
@@ -228,6 +292,61 @@ describe('buildReportHtml', () => {
     // hasMigratedDays → asterisk + footnote
     expect(html).toContain('Nausea *');
     expect(html).toContain('defaulted when migrating');
+  });
+
+  it('renders a cover summary with trend arrows and value-free scale-anchor captions', () => {
+    const rows = [
+      eveningRatingRow('2026-07-01' as IsoDate, 2, 4),
+      eveningRatingRow('2026-07-02' as IsoDate, 2, 4),
+      eveningRatingRow('2026-07-03' as IsoDate, 2, 4),
+      eveningRatingRow('2026-07-04' as IsoDate, 4, 2),
+      eveningRatingRow('2026-07-05' as IsoDate, 4, 2),
+      eveningRatingRow('2026-07-06' as IsoDate, 4, 2),
+    ];
+    const html = htmlFromRows(null, [], rows);
+    expect(html).toContain('<h2>Summary</h2>');
+    // mood rose 2.0 → 4.0 across the halves: an up arrow with mood's own anchor.
+    expect(html).toContain('▲');
+    expect(html).toContain('first half 2.0 → second half 4.0');
+    expect(html).toContain('1 = Low, 5 = Great');
+    // anxiety fell 4.0 → 2.0: a down arrow, anchored so it can't be read against mood's arrow.
+    expect(html).toContain('▼');
+    expect(html).toContain('1 = Calm, 5 = On edge');
+  });
+
+  it('renders a flat glyph when a metric holds steady across the halves', () => {
+    const rows = [
+      eveningRatingRow('2026-07-01' as IsoDate, 3, 3),
+      eveningRatingRow('2026-07-02' as IsoDate, 3, 3),
+      eveningRatingRow('2026-07-03' as IsoDate, 3, 3),
+      eveningRatingRow('2026-07-04' as IsoDate, 3, 3),
+      eveningRatingRow('2026-07-05' as IsoDate, 3, 3),
+      eveningRatingRow('2026-07-06' as IsoDate, 3, 3),
+    ];
+    const html = htmlFromRows(null, [], rows);
+    expect(html).toContain('▬');
+    expect(html).toContain('first half 3.0 → second half 3.0');
+  });
+
+  it('shows the multi-dose caveat when a dose change falls inside the range', () => {
+    const rows = [
+      eveningRatingRow('2026-07-01' as IsoDate, 3, 3),
+      eveningRatingRow('2026-07-06' as IsoDate, 3, 3),
+    ];
+    const doses: readonly DoseChange[] = [
+      { date: '2026-07-03' as IsoDate, dose: { amount: 40, unit: 'mg' } },
+    ];
+    const html = htmlFromRows(null, doses, rows);
+    expect(html).toContain('This range spans more than one dose');
+  });
+
+  it('renders an insufficient-data placeholder instead of an arrow when a metric has too few days', () => {
+    const rows = [
+      eveningRatingRow('2026-07-01' as IsoDate, 3, 3),
+      eveningRatingRow('2026-07-02' as IsoDate, 4, 4),
+    ];
+    const html = htmlFromRows(null, [], rows);
+    expect(html).toContain('not enough logged days to compare halves');
   });
 
   const noteRow = (date: IsoDate, notes: string): DayEntry => ({

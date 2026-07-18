@@ -4,6 +4,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import {
   EVENING_METRICS,
   MORNING_METRICS,
+  REPORT_RATING_ORDER,
   SIDE_EFFECT_LABELS,
   SIDE_EFFECT_SEVERITY_LABELS,
 } from './schema';
@@ -20,7 +21,7 @@ import {
   parseEntries,
   parseProfile,
 } from './storage';
-import { SIDE_EFFECTS } from './types';
+import { SIDE_EFFECTS, assertNever } from './types';
 import type {
   DayEntry,
   Dose,
@@ -36,6 +37,7 @@ import type {
   Session,
   SideEffect,
   SideEffectSeverity,
+  TrendDirection,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -67,6 +69,79 @@ export function averageOf(
   const values = rows.map(pick).filter((value): value is Rating => value !== undefined);
   if (values.length === 0) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/**
+ * A computed average is either a real mean over >=1 sample, or explicitly empty. No NaN, no magic
+ * -1: the empty case is a distinct variant, so `noUncheckedIndexedAccess` concerns vanish and a
+ * missing average can never be read as a number. This is the single canonical "maybe a mean" the
+ * whole report module uses.
+ */
+export type MetricAverage =
+  | { readonly kind: 'value'; readonly mean: number; readonly n: number }
+  | { readonly kind: 'empty' };
+
+/**
+ * A trend is the descriptive comparison of two halves. `flat` still carries the halves and delta,
+ * so the renderer never recomputes or branches on missing data; `insufficient` is a distinct
+ * variant, never `direction: 'flat'` masquerading as a measured comparison.
+ */
+export type MetricTrend =
+  | { readonly kind: 'insufficient' } // empty half, or < MIN_HALF_SAMPLES in either half
+  | {
+      readonly kind: 'measured';
+      readonly direction: TrendDirection;
+      readonly firstHalf: number;
+      readonly secondHalf: number;
+      readonly delta: number;
+    };
+
+// Neutral deadband: |delta| below this renders 'flat'. Chosen at 0.3 of a 1..5 point so a
+// rounding-level wobble never reads as a direction.
+const TREND_DEADBAND = 0.3;
+
+// Minimum samples per half before a delta is presented as a measured trend. Below this,
+// day-to-day Likert noise clears the deadband, so we return 'insufficient' instead of a
+// confident-looking arrow.
+const MIN_HALF_SAMPLES = 3;
+
+/** The single adapter from a legacy `number | null` mean to the canonical union. */
+export function toMetricAverage(mean: number | null, n: number): MetricAverage {
+  return mean === null || n === 0 ? { kind: 'empty' } : { kind: 'value', mean, n };
+}
+
+/** Canonical average producer: counts samples and means them, yielding a `MetricAverage`. */
+export function metricAverage(
+  rows: readonly DayEntry[],
+  pick: (row: DayEntry) => Rating | undefined,
+): MetricAverage {
+  const values = rows.map(pick).filter((value): value is Rating => value !== undefined);
+  if (values.length === 0) return { kind: 'empty' };
+  return {
+    kind: 'value',
+    mean: values.reduce((sum, v) => sum + v, 0) / values.length,
+    n: values.length,
+  };
+}
+
+/**
+ * Descriptive comparison of two halves. Consumes two `MetricAverage`s (one absence idiom, not
+ * three) and enforces both the deadband and the minimum-sample floor, so a short range returns
+ * `insufficient` rather than a noise-driven arrow.
+ */
+export function computeTrend(first: MetricAverage, second: MetricAverage): MetricTrend {
+  if (
+    first.kind === 'empty' ||
+    second.kind === 'empty' ||
+    first.n < MIN_HALF_SAMPLES ||
+    second.n < MIN_HALF_SAMPLES
+  ) {
+    return { kind: 'insufficient' };
+  }
+  const delta = second.mean - first.mean;
+  const direction: TrendDirection =
+    Math.abs(delta) < TREND_DEADBAND ? 'flat' : delta > 0 ? 'up' : 'down';
+  return { kind: 'measured', direction, firstHalf: first.mean, secondHalf: second.mean, delta };
 }
 
 export interface ScaleAverage {
@@ -279,6 +354,38 @@ function severityColor(severity: SideEffectSeverity): string {
   }
 }
 
+type ScaleMetric = Extract<Metric, { kind: 'scale' }>;
+
+/** The scale metric for a rating key, or undefined for a non-scale/unknown key. Narrowed, never `!`. */
+function scaleMetricFor(key: RatingKey): ScaleMetric | undefined {
+  return [...MORNING_METRICS, ...EVENING_METRICS].find(
+    (metric): metric is ScaleMetric => metric.kind === 'scale' && metric.key === key,
+  );
+}
+
+/** Exhaustive over `TrendDirection` — adding a member fails to compile until handled here. */
+function arrowGlyph(direction: TrendDirection): string {
+  switch (direction) {
+    case 'up':
+      return '▲';
+    case 'down':
+      return '▼';
+    case 'flat':
+      return '▬';
+    default:
+      return assertNever(direction);
+  }
+}
+
+/**
+ * Value-free schema restatement of a scale, e.g. "1 = Calm, 5 = On edge". States what a higher
+ * value *means* for that item so `anxiety ▲` can't be pattern-matched against `mood ▲` — never
+ * "better/worse".
+ */
+function scaleAnchorCaption(metric: ScaleMetric): string {
+  return `1 = ${metric.low}, 5 = ${metric.high}`;
+}
+
 /**
  * Options for a report render. Range is resolved before this call (via `datesInRange` /
  * `lastNDates`) and arrives as explicit `rangeStart`/`rangeEnd` params, so it is deliberately
@@ -312,6 +419,46 @@ export function buildReportHtml(
 ): string {
   const rows = rowsInRange(entries, datesInRange(rangeStart, rangeEnd));
   const onset = firstOnsetDates(entries);
+
+  // Cover summary: per-metric first-half-vs-second-half trend arrows with value-free scale-anchor
+  // captions. Metrics with no data in range are omitted (matches the evening-averages behavior:
+  // the report reflects data present, not the current Settings toggle).
+  const spansMultipleDosePeriods = doses.some(
+    (change) =>
+      change.date.localeCompare(rangeStart) > 0 && change.date.localeCompare(rangeEnd) <= 0,
+  );
+  const midpoint = Math.floor(rows.length / 2);
+  const firstHalfRows = rows.slice(0, midpoint);
+  const secondHalfRows = rows.slice(rows.length - midpoint);
+  const trendRows = REPORT_RATING_ORDER.flatMap((key) => {
+    const metric = scaleMetricFor(key);
+    if (metric === undefined) return [];
+    const pick = ratingAccessor(isMorningRatingKey(key) ? 'morning' : 'evening', key);
+    if (metricAverage(rows, pick).kind === 'empty') return []; // no data in range → omit
+    const trend = computeTrend(
+      metricAverage(firstHalfRows, pick),
+      metricAverage(secondHalfRows, pick),
+    );
+    const caption = escapeHtml(scaleAnchorCaption(metric));
+    const cell =
+      trend.kind === 'insufficient'
+        ? `— <span class="muted">(not enough logged days to compare halves; ${caption})</span>`
+        : `${arrowGlyph(trend.direction)} <span class="muted">(first half ${trend.firstHalf.toFixed(1)} → second half ${trend.secondHalf.toFixed(1)}; ${caption})</span>`;
+    return [`<tr><td>${escapeHtml(metric.label)}</td><td>${cell}</td></tr>`];
+  });
+  const coverSummary = `<h2>Summary</h2>
+      <p>${escapeHtml(rangeStart)} → ${escapeHtml(rangeEnd)}</p>
+      ${
+        spansMultipleDosePeriods
+          ? `<p>This range spans more than one dose. See the per-dose-period and before/after sections below for the split view.</p>`
+          : ''
+      }
+      ${
+        trendRows.length === 0
+          ? `<p>Not enough logged data in this range to show trends.</p>`
+          : `<table><tr><th>Metric</th><th>Trend</th></tr>${trendRows.join('')}</table>`
+      }`;
+
   const morningAverages = computeScaleAverages(MORNING_METRICS, 'morning', rows);
   const eveningAverages = computeScaleAverages(EVENING_METRICS, 'evening', rows).filter(
     (average) => average.average !== null,
@@ -428,10 +575,12 @@ export function buildReportHtml(
       h1 { margin-top: 24px; }
       h2 { margin-top: 24px; color: ${palette.pineStrong}; }
       p { color: ${palette.warm500}; }
+      .muted { color: ${palette.warm500}; font-size: 12px; }
     </style>
     </head>
     <body>
       ${header}
+      ${coverSummary}
       ${doseTimeline}
       ${averagesTable('Morning averages', morningAverages)}
       ${averagesTable('Evening averages', eveningAverages)}

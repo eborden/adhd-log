@@ -182,6 +182,23 @@ export function withEveningMetricToggled(
   return enabled.filter((existing) => existing !== key);
 }
 
+/**
+ * The order rating metrics appear in the provider report (cover trend arrows, per-period tables).
+ * Kept here so report ordering is a single source of truth in the schema, not hard-coded in
+ * `export.ts`. Morning keys first, then evening in check-in order.
+ */
+export const REPORT_RATING_ORDER: readonly RatingKey[] = [
+  'sleepQuality',
+  'wakingMood',
+  'mood',
+  'focus',
+  'impulsivity',
+  'anxiety',
+  'energy',
+  'appetite',
+  'libido',
+] as const;
+
 type ScaleMetric = Extract<Metric, { kind: 'scale' }>;
 
 /** The good/bad direction for a scale metric's key, looked up from the schema. */

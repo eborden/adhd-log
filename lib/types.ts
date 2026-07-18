@@ -130,6 +130,13 @@ export type RatingKey = MorningRatingKey | EveningRatingKey;
 export type ScaleDirection = 'higher-better' | 'lower-better' | 'neutral';
 
 /**
+ * The sign of a measured first-half-vs-second-half delta, kept value-free: `up`/`down` say only
+ * which way the number moved, never whether that is good. Shared by the report's trend arrows and
+ * usable by the trends tab later.
+ */
+export type TrendDirection = 'up' | 'down' | 'flat';
+
+/**
  * Discriminated union driving generic, exhaustive check-in rendering — see
  * `lib/schema.ts`. `switch (metric.kind)` must end with a `never` assertion so
  * adding a variant here forces every consumer to handle it.
