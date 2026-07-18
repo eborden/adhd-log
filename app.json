@@ -35,7 +35,8 @@
         {
           "faceIDPermission": "Unlock your check-in data with Face ID."
         }
-      ]
+      ],
+      "./plugins/withReleaseSigning"
     ]
   }
 }

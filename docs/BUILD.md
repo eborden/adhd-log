@@ -59,16 +59,22 @@ The APK lands at `android/app/build/outputs/apk/release/app-release.apk`.
 
 ## How signing is wired
 
-`expo prebuild` regenerates `android/` each time, so we do **not** keep the password in
-that tree. `android/app/build.gradle` declares a `release` signing config that only
-activates when the `ADHDLOG_*` Gradle properties are present (passed as `-P` flags in
-step 2, sourced from `credentials/signing.properties`); without them it falls back to the
-debug key. The secret therefore lives only in the gitignored `credentials/` dir.
+`expo prebuild` regenerates (and clears) the whole `android/` tree, so we do **not** keep
+the password — or any hand edit — in that tree. Instead, the config plugin
+[`plugins/withReleaseSigning.ts`](../plugins/withReleaseSigning.ts) (registered in
+`app.json` under `plugins`) re-injects a `release` signing config into
+`android/app/build.gradle` on **every** prebuild. That config only activates when the
+`ADHDLOG_*` Gradle properties are present (passed as `-P` flags in step 2, sourced from
+`credentials/signing.properties`); without them it falls back to the debug key. The secret
+therefore lives only in the gitignored `credentials/` dir.
 
-> Note: the `build.gradle` signing edit is applied to the generated `android/` tree. If
-> you run `expo prebuild --clean` it is regenerated and the edit is lost — re-apply the
-> `release` signingConfig block (see git history / this repo's build commit) or, for a
-> more permanent setup, move it into an Expo config plugin.
+Because the plugin runs automatically, there is nothing to re-apply by hand after a
+prebuild (`--clean` or not) — regenerate freely.
+
+> Note: the plugin anchors on the stock RN/Expo `build.gradle` template text. If a future
+> Expo/RN upgrade changes that template, the plugin **throws during prebuild** rather than
+> silently shipping a debug-signed APK — update the anchor strings in
+> `plugins/withReleaseSigning.ts` when that happens.
 
 ## Updating the app later
 
