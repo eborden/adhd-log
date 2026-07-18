@@ -6,6 +6,7 @@ import { Card } from '../../components/Card';
 import { DoseInput } from '../../components/DoseInput';
 import { Stepper } from '../../components/Stepper';
 import { Toggle } from '../../components/Toggle';
+import { parseDoseAmount } from '../../lib/checkin';
 import {
   buildBackup,
   buildReportHtml,
@@ -75,8 +76,8 @@ export default function Settings() {
   };
 
   const handleLogDoseChange = async (): Promise<void> => {
-    const amount = Number(newAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const amount = parseDoseAmount(newAmount);
+    if (amount === undefined) {
       Alert.alert('Enter a dose amount above 0.');
       return;
     }

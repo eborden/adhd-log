@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_DRAFT, draftFromEvening, draftFromMorning, ratingsFromDraft } from '../checkin';
+import {
+  EMPTY_DRAFT,
+  draftFromEvening,
+  draftFromMorning,
+  parseDoseAmount,
+  ratingsFromDraft,
+} from '../checkin';
 import { isoTimestampNow } from '../storage';
 import { EVENING_RATING_KEYS, MORNING_RATING_KEYS } from '../types';
 import type { EveningCheckin, MorningCheckin, Rating, RatingKey } from '../types';
@@ -73,5 +79,20 @@ describe('draft <-> checkin conversion', () => {
   it('EMPTY_DRAFT starts with dose taken and no ratings', () => {
     expect(EMPTY_DRAFT.doseTaken).toBe(true);
     expect(EMPTY_DRAFT.ratings).toEqual({});
+  });
+});
+
+describe('parseDoseAmount', () => {
+  it('returns the number for a valid positive amount', () => {
+    expect(parseDoseAmount('10')).toBe(10);
+    expect(parseDoseAmount('2.5')).toBe(2.5);
+  });
+
+  it('rejects zero, negatives, blanks, and non-numeric input', () => {
+    expect(parseDoseAmount('0')).toBeUndefined();
+    expect(parseDoseAmount('-5')).toBeUndefined();
+    expect(parseDoseAmount('')).toBeUndefined();
+    expect(parseDoseAmount('abc')).toBeUndefined();
+    expect(parseDoseAmount('x1')).toBeUndefined();
   });
 });

@@ -69,3 +69,9 @@ export function draftFromEvening(checkin: EveningCheckin): Draft {
     notes: checkin.notes ?? '',
   };
 }
+
+/** Parses a dose-amount text field to a positive finite number, or undefined if invalid. */
+export function parseDoseAmount(text: string): number | undefined {
+  const amount = Number(text);
+  return Number.isFinite(amount) && amount > 0 ? amount : undefined;
+}

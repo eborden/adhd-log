@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { DoseInput } from '../components/DoseInput';
 import { Stepper } from '../components/Stepper';
 import { Toggle } from '../components/Toggle';
+import { parseDoseAmount } from '../lib/checkin';
 import { requestNotificationPermissions, scheduleReminders } from '../lib/notifications';
 import {
   addDays,
@@ -28,12 +29,12 @@ export default function Onboarding() {
   const [lockEnabled, setLockEnabled] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const amount = Number(amountText);
-  const canSubmit = isMedName(medName.trim()) && Number.isFinite(amount) && amount > 0;
+  const amount = parseDoseAmount(amountText);
+  const canSubmit = isMedName(medName.trim()) && amount !== undefined;
 
   const handleSubmit = async (): Promise<void> => {
     const trimmedName = medName.trim();
-    if (!isMedName(trimmedName) || !Number.isFinite(amount) || amount <= 0) {
+    if (!isMedName(trimmedName) || amount === undefined) {
       setError('Enter a medication name and a dose amount above 0.');
       return;
     }
