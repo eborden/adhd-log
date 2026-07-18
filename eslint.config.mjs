@@ -1,9 +1,10 @@
+import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 import eslintComments from '@eslint-community/eslint-plugin-eslint-comments';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import globals from 'globals';
 
-export default tseslint.config(
+export default defineConfig(
   {
     ignores: [
       'node_modules/**',
@@ -21,8 +22,9 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: true,
-        tsconfigRootDir: import.meta.dirname,
+        projectService: {
+          allowDefaultProject: ['eslint.config.mjs', '.lintstagedrc.mjs'],
+        },
       },
       globals: {
         ...globals.node,

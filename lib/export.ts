@@ -18,7 +18,9 @@ import type {
   Parsed,
   Profile,
   Rating,
+  RatingKey,
   ScaleDirection,
+  Session,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -45,6 +47,16 @@ const EVENING_ACCESSORS: Readonly<Record<EveningRatingKey, (row: DayEntry) => Ra
     appetite: (row) => row.evening?.appetite,
     libido: (row) => row.evening?.libido,
   };
+
+/** The accessor for a scale metric's value, keyed by which session it belongs to. */
+export function ratingAccessor(
+  session: Session,
+  key: RatingKey,
+): ((row: DayEntry) => Rating | undefined) | undefined {
+  const accessors: Readonly<Record<string, (row: DayEntry) => Rating | undefined>> =
+    session === 'morning' ? MORNING_ACCESSORS : EVENING_ACCESSORS;
+  return accessors[key];
+}
 
 export function averageOf(
   rows: readonly DayEntry[],
