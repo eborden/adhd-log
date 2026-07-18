@@ -399,6 +399,21 @@ export function lastNDates(n: number, endDate: IsoDate): readonly IsoDate[] {
   return dates;
 }
 
+/**
+ * Every calendar day from `start` to `end` inclusive, oldest first. Empty when `end` precedes
+ * `start`. The report derives its display rows from this so a range arrives as two dates rather
+ * than a count. Pure — no I/O.
+ */
+export function datesInRange(start: IsoDate, end: IsoDate): readonly IsoDate[] {
+  const dates: IsoDate[] = [];
+  let cursor = start;
+  while (cursor.localeCompare(end) <= 0) {
+    dates.push(cursor);
+    cursor = addDays(cursor, 1);
+  }
+  return dates;
+}
+
 /** Consecutive days ending at `today` with at least one completed session. */
 export function computeStreak(
   entries: Readonly<Record<IsoDate, DayEntry>>,

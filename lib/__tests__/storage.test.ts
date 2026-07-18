@@ -6,6 +6,7 @@ import {
   type CheckinInput,
   clearAllData,
   computeStreak,
+  datesInRange,
   doseActiveOn,
   doseChangeMarkers,
   firstOnsetDates,
@@ -414,6 +415,20 @@ describe('date helpers', () => {
   it('lastNDates returns n dates ending at the given date, oldest first', () => {
     const dates = lastNDates(3, '2026-07-17' as IsoDate);
     expect(dates).toEqual(['2026-07-15', '2026-07-16', '2026-07-17']);
+  });
+
+  it('datesInRange returns every day from start to end inclusive, oldest first', () => {
+    expect(datesInRange('2026-07-30' as IsoDate, '2026-08-02' as IsoDate)).toEqual([
+      '2026-07-30',
+      '2026-07-31',
+      '2026-08-01',
+      '2026-08-02',
+    ]);
+  });
+
+  it('datesInRange is a single day when start equals end, and empty when end precedes start', () => {
+    expect(datesInRange('2026-07-17' as IsoDate, '2026-07-17' as IsoDate)).toEqual(['2026-07-17']);
+    expect(datesInRange('2026-07-17' as IsoDate, '2026-07-16' as IsoDate)).toEqual([]);
   });
 
   it('todayIsoDate and isoTimestampNow produce validly-formatted values', () => {

@@ -5,6 +5,7 @@ import {
   averageOf,
   buildBackup,
   buildReportHtml,
+  collectNotes,
   exportJsonBackup,
   exportPdfReport,
   importJsonBackup,
@@ -13,6 +14,7 @@ import {
   rowsInRange,
   severityRunLength,
   sideEffectSummary,
+  type ReportOptions,
 } from '../export';
 import { isoTimestampNow } from '../storage';
 import type { DayEntry, DoseChange, IsoDate, Profile, Rating, SideEffect } from '../types';
@@ -32,6 +34,26 @@ function morningRow(date: IsoDate, sleepQuality: Rating): DayEntry {
       completedAt: isoTimestampNow(),
     },
   };
+}
+
+/**
+ * `buildReportHtml` takes the full entries map + explicit range and computes onset internally.
+ * These render tests are still most legible in terms of a row list, so this adapter maps rows to
+ * an entries record and infers the range from the first/last row's date.
+ */
+function htmlFromRows(
+  profile: Profile | null,
+  doses: readonly DoseChange[],
+  rows: readonly DayEntry[],
+  options?: ReportOptions,
+): string {
+  const entries: Record<IsoDate, DayEntry> = {};
+  for (const row of rows) entries[row.date] = row;
+  const start = rows[0]?.date ?? DAY_1;
+  const end = rows[rows.length - 1]?.date ?? start;
+  return options === undefined
+    ? buildReportHtml(profile, doses, entries, start, end)
+    : buildReportHtml(profile, doses, entries, start, end, options);
 }
 
 describe('averageOf', () => {
@@ -95,7 +117,7 @@ describe('buildReportHtml', () => {
     const doses: readonly DoseChange[] = [
       { date: DAY_1, dose: { amount: 40, unit: 'mg' }, note: 'titrating up' },
     ];
-    const html = buildReportHtml(profile, doses, rows, NO_ONSET);
+    const html = htmlFromRows(profile, doses, rows);
 
     expect(html).toContain('Atomoxetine');
     expect(html).toContain('Morning averages');
@@ -126,7 +148,7 @@ describe('buildReportHtml', () => {
         completedAt: isoTimestampNow(),
       },
     };
-    const html = buildReportHtml(null, [], [rowWithSideEffects], NO_ONSET);
+    const html = htmlFromRows(null, [], [rowWithSideEffects]);
     expect(html).toContain('Nausea (Severe), Headache (Mild)');
   });
 
@@ -147,7 +169,7 @@ describe('buildReportHtml', () => {
         completedAt: isoTimestampNow(),
       },
     };
-    const html = buildReportHtml(null, [], [rowMoodFocusOnly, rowWithLibido], NO_ONSET);
+    const html = htmlFromRows(null, [], [rowMoodFocusOnly, rowWithLibido]);
 
     // mood/focus answered both days: (5+3)/2 = 4.0
     expect(html).toContain('<td>Overall mood today</td><td>4.0</td>');
@@ -168,7 +190,7 @@ describe('buildReportHtml', () => {
       lockEnabled: false,
       createdAt: isoTimestampNow(),
     };
-    const html = buildReportHtml(profile, [], [{ date: DAY_1 }], NO_ONSET);
+    const html = htmlFromRows(profile, [], [{ date: DAY_1 }]);
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
   });
@@ -194,9 +216,9 @@ describe('buildReportHtml', () => {
         },
       },
     ];
-    const onset = new Map<SideEffect, IsoDate>([['nausea', DAY_1]]);
     const doses: readonly DoseChange[] = [{ date: DAY_1, dose: { amount: 40, unit: 'mg' } }];
-    const html = buildReportHtml(null, doses, rows, onset);
+    // onset is now computed internally from the entries map (nausea first appears on DAY_1).
+    const html = htmlFromRows(null, doses, rows);
 
     expect(html).toContain('<h2>Side effects</h2>');
     expect(html).toContain('Dose taken on 1 of 2 logged mornings in this range.');
@@ -206,6 +228,60 @@ describe('buildReportHtml', () => {
     // hasMigratedDays → asterisk + footnote
     expect(html).toContain('Nausea *');
     expect(html).toContain('defaulted when migrating');
+  });
+
+  const noteRow = (date: IsoDate, notes: string): DayEntry => ({
+    date,
+    evening: { ratings: {}, sideEffects: {}, notes, completedAt: isoTimestampNow() },
+  });
+
+  it('renders dated notes, escaped, when includeNotes is on (the default)', () => {
+    const html = htmlFromRows(null, [], [noteRow(DAY_1, 'skipped lunch, focus crashed <3pm>')]);
+    expect(html).toContain('<h2>Notes</h2>');
+    expect(html).toContain(DAY_1);
+    expect(html).toContain('skipped lunch, focus crashed &lt;3pm&gt;');
+    expect(html).not.toContain('<3pm>');
+  });
+
+  it('omits the notes section entirely when includeNotes is false', () => {
+    const html = htmlFromRows(null, [], [noteRow(DAY_1, 'private note')], {
+      beforeAfterWindowDays: 14,
+      includeNotes: false,
+    });
+    expect(html).not.toContain('<h2>Notes</h2>');
+    expect(html).not.toContain('private note');
+  });
+});
+
+describe('collectNotes', () => {
+  it('collects only evening notes, oldest first, skipping blank and morning-only days', () => {
+    const rows: readonly DayEntry[] = [
+      {
+        date: DAY_1,
+        evening: { ratings: {}, sideEffects: {}, notes: 'day one', completedAt: isoTimestampNow() },
+      },
+      morningRow(DAY_2, 3), // morning-only, no note
+      {
+        date: DAY_3,
+        evening: { ratings: {}, sideEffects: {}, notes: '   ', completedAt: isoTimestampNow() },
+      },
+    ];
+    expect(collectNotes(rows)).toEqual([{ date: DAY_1, text: 'day one' }]);
+  });
+
+  it('trims surrounding whitespace but keeps the raw (unescaped) text', () => {
+    const rows: readonly DayEntry[] = [
+      {
+        date: DAY_1,
+        evening: {
+          ratings: {},
+          sideEffects: {},
+          notes: '  <b>hi</b>  ',
+          completedAt: isoTimestampNow(),
+        },
+      },
+    ];
+    expect(collectNotes(rows)).toEqual([{ date: DAY_1, text: '<b>hi</b>' }]);
   });
 });
 

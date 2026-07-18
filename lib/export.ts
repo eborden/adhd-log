@@ -9,7 +9,9 @@ import {
 } from './schema';
 import { palette } from './tokens';
 import {
+  datesInRange,
   doseActiveOn,
+  firstOnsetDates,
   isDoseChangeList,
   isEveningRatingKey,
   isIsoTimestamp,
@@ -244,6 +246,27 @@ export function sideEffectSummary(
   return out;
 }
 
+export interface DatedNote {
+  readonly date: IsoDate;
+  readonly text: string; // escaped at render time, never before
+}
+
+/**
+ * Evening free-text notes as a dated list, oldest first (rows arrive oldest-first). Blank/
+ * whitespace-only notes are skipped. Text is returned raw and escaped only at render time.
+ */
+export function collectNotes(rows: readonly DayEntry[]): readonly DatedNote[] {
+  const notes: DatedNote[] = [];
+  for (const row of rows) {
+    const text = row.evening?.notes;
+    if (text === undefined) continue;
+    const trimmed = text.trim();
+    if (trimmed === '') continue;
+    notes.push({ date: row.date, text: trimmed });
+  }
+  return notes;
+}
+
 /** Severity badge color for the report — reuses the app's rating hues (no new hex). */
 function severityColor(severity: SideEffectSeverity): string {
   switch (severity) {
@@ -256,13 +279,39 @@ function severityColor(severity: SideEffectSeverity): string {
   }
 }
 
-/** Builds the printable HTML report: header, dose timeline, averages, side effects, daily table. */
+/**
+ * Options for a report render. Range is resolved before this call (via `datesInRange` /
+ * `lastNDates`) and arrives as explicit `rangeStart`/`rangeEnd` params, so it is deliberately
+ * not a field here.
+ */
+export interface ReportOptions {
+  readonly beforeAfterWindowDays: number; // default 14
+  readonly includeNotes: boolean; // default true; Settings toggle can exclude free-text notes
+}
+
+export const DEFAULT_REPORT_OPTIONS: ReportOptions = {
+  beforeAfterWindowDays: 14,
+  includeNotes: true,
+};
+
+/**
+ * Builds the printable HTML report: header, dose timeline, averages, side effects, daily table.
+ *
+ * Takes the full `entries` map plus an explicit range rather than pre-clipped rows: the
+ * dose-period and before/after sections must reach outside the display window (a 7-day report
+ * can still need a 14-day "before" window around a dose change weeks prior). Display rows are
+ * derived internally from `datesInRange(rangeStart, rangeEnd)`.
+ */
 export function buildReportHtml(
   profile: Profile | null,
   doses: readonly DoseChange[],
-  rows: readonly DayEntry[],
-  onset: ReadonlyMap<SideEffect, IsoDate>,
+  entries: Readonly<Record<IsoDate, DayEntry>>,
+  rangeStart: IsoDate,
+  rangeEnd: IsoDate,
+  options: ReportOptions = DEFAULT_REPORT_OPTIONS,
 ): string {
+  const rows = rowsInRange(entries, datesInRange(rangeStart, rangeEnd));
+  const onset = firstOnsetDates(entries);
   const morningAverages = computeScaleAverages(MORNING_METRICS, 'morning', rows);
   const eveningAverages = computeScaleAverages(EVENING_METRICS, 'evening', rows).filter(
     (average) => average.average !== null,
@@ -358,6 +407,18 @@ export function buildReportHtml(
              : ''
          }`;
 
+  const notes = options.includeNotes ? collectNotes(rows) : [];
+  const notesSection =
+    notes.length === 0
+      ? ''
+      : `<h2>Notes</h2>
+         ${notes
+           .map(
+             (note) =>
+               `<p><strong>${escapeHtml(note.date)}</strong> — ${escapeHtml(note.text)}</p>`,
+           )
+           .join('')}`;
+
   return `<html>
     <head><meta charset="utf-8" />
     <style>
@@ -375,6 +436,7 @@ export function buildReportHtml(
       ${averagesTable('Morning averages', morningAverages)}
       ${averagesTable('Evening averages', eveningAverages)}
       ${sideEffectsSection}
+      ${notesSection}
       <h2>Daily log</h2>
       <table>
         <tr><th>Date</th><th>Sleep</th><th>Waking mood</th><th>Mood</th><th>Focus</th><th>Side effects</th></tr>
