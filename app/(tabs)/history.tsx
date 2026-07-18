@@ -1,25 +1,17 @@
-import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { Card } from '../../components/Card';
+import { useFocusLoad } from '../../hooks/useFocusLoad';
 import { loadEntries } from '../../lib/storage';
 import { radius, space, typography, useTheme } from '../../lib/theme';
 import type { DayEntry, IsoDate } from '../../lib/types';
 
 export default function History() {
   const theme = useTheme();
-  const [days, setDays] = useState<readonly DayEntry[]>([]);
-
-  const refresh = useCallback((): void => {
-    loadEntries()
-      .then((entries) => {
-        const sorted = Object.values(entries).sort((a, b) => b.date.localeCompare(a.date));
-        setDays(sorted);
-      })
-      .catch(() => undefined);
+  const { data: days } = useFocusLoad<readonly DayEntry[]>(async () => {
+    const entries = await loadEntries();
+    return Object.values(entries).sort((a, b) => b.date.localeCompare(a.date));
   }, []);
-
-  useFocusEffect(refresh);
 
   if (days.length === 0) {
     return (

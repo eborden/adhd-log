@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusLoad } from '../../hooks/useFocusLoad';
 import { ratingAccessor, rowsInRange } from '../../lib/export';
 import { EVENING_METRICS, MORNING_METRICS } from '../../lib/schema';
 import {
@@ -20,6 +20,14 @@ interface TaggedMetric {
   readonly session: Session;
 }
 
+interface TrendsData {
+  readonly dates: readonly IsoDate[];
+  readonly rows: readonly DayEntry[];
+  readonly markers: ReadonlySet<IsoDate>;
+}
+
+const EMPTY_TRENDS: TrendsData = { dates: [], rows: [], markers: new Set<IsoDate>() };
+
 function barHeight(rating: number | undefined): number {
   if (rating === undefined) return 4;
   return 8 + rating * 8;
@@ -28,22 +36,21 @@ function barHeight(rating: number | undefined): number {
 export default function Trends() {
   const theme = useTheme();
   const [range, setRange] = useState<number>(14);
-  const [dates, setDates] = useState<readonly IsoDate[]>([]);
-  const [rows, setRows] = useState<readonly DayEntry[]>([]);
-  const [markers, setMarkers] = useState<ReadonlySet<IsoDate>>(new Set());
 
-  const refresh = useCallback((): void => {
-    Promise.all([loadEntries(), loadDoseChanges()])
-      .then(([entries, doses]) => {
-        const rangeDates = lastNDates(range, todayIsoDate());
-        setDates(rangeDates);
-        setRows(rowsInRange(entries, rangeDates));
-        setMarkers(doseChangeMarkers(doses, rangeDates));
-      })
-      .catch(() => undefined);
-  }, [range]);
-
-  useFocusEffect(refresh);
+  const { data } = useFocusLoad<TrendsData>(
+    async () => {
+      const [entries, doses] = await Promise.all([loadEntries(), loadDoseChanges()]);
+      const rangeDates = lastNDates(range, todayIsoDate());
+      return {
+        dates: rangeDates,
+        rows: rowsInRange(entries, rangeDates),
+        markers: doseChangeMarkers(doses, rangeDates),
+      };
+    },
+    EMPTY_TRENDS,
+    [range],
+  );
+  const { dates, rows, markers } = data;
 
   const visibleScaleMetrics: readonly TaggedMetric[] = [
     ...MORNING_METRICS.filter((metric) => metric.kind === 'scale').map((metric) => ({

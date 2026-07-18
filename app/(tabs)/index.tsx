@@ -1,28 +1,18 @@
-import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { Card } from '../../components/Card';
+import { useFocusLoad } from '../../hooks/useFocusLoad';
 import { computeStreak, loadEntries, todayIsoDate } from '../../lib/storage';
 import { radius, space, typography, useTheme } from '../../lib/theme';
-import type { DayEntry } from '../../lib/types';
+import type { DayEntry, IsoDate } from '../../lib/types';
 
 export default function Today() {
   const theme = useTheme();
-  const [entry, setEntry] = useState<DayEntry | undefined>(undefined);
-  const [streak, setStreak] = useState(0);
-
-  const refresh = useCallback((): void => {
-    loadEntries()
-      .then((entries) => {
-        const today = todayIsoDate();
-        setEntry(entries[today]);
-        setStreak(computeStreak(entries, today));
-      })
-      .catch(() => undefined);
-  }, []);
-
-  useFocusEffect(refresh);
+  const { data: entries } = useFocusLoad<Readonly<Record<IsoDate, DayEntry>>>(loadEntries, {});
+  const today = todayIsoDate();
+  const entry = entries[today];
+  const streak = computeStreak(entries, today);
 
   const morningDone = entry?.morning !== undefined;
   const eveningDone = entry?.evening !== undefined;

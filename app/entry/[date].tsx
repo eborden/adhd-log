@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../components/Card';
+import { useFocusLoad } from '../../hooks/useFocusLoad';
 import { ratingAccessor } from '../../lib/export';
 import {
   EVENING_METRICS,
@@ -85,23 +85,26 @@ function SectionHeader({
   );
 }
 
+interface EntryData {
+  readonly entry: DayEntry | undefined;
+  readonly profile: Profile | null;
+}
+
 export default function Entry() {
   const theme = useTheme();
   const params = useLocalSearchParams<{ date?: string }>();
   const date: IsoDate = isIsoDate(params.date) ? params.date : todayIsoDate();
-  const [entry, setEntry] = useState<DayEntry | undefined>(undefined);
-  const [profile, setProfile] = useState<Profile | null>(null);
 
-  const refresh = useCallback((): void => {
-    Promise.all([loadEntries(), loadProfile()])
-      .then(([entries, loadedProfile]) => {
-        setEntry(entries[date]);
-        setProfile(loadedProfile);
-      })
-      .catch(() => undefined);
-  }, [date]);
-
-  useFocusEffect(refresh);
+  const { data } = useFocusLoad<EntryData>(
+    async () => {
+      const [entries, loadedProfile] = await Promise.all([loadEntries(), loadProfile()]);
+      return { entry: entries[date], profile: loadedProfile };
+    },
+    { entry: undefined, profile: null },
+    [date],
+  );
+  const entry = data.entry;
+  const profile = data.profile;
 
   const dayRow: DayEntry = entry ?? { date };
   const morning = dayRow.morning;

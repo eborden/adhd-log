@@ -1,11 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { DoseInput } from '../../components/DoseInput';
 import { Stepper } from '../../components/Stepper';
 import { Toggle } from '../../components/Toggle';
+import { useFocusLoad } from '../../hooks/useFocusLoad';
 import { parseDoseAmount } from '../../lib/checkin';
 import {
   buildBackup,
@@ -36,6 +36,11 @@ import {
 import { radius, space, typography, useTheme } from '../../lib/theme';
 import type { DoseChange, DoseUnit, Profile } from '../../lib/types';
 
+interface SettingsData {
+  readonly profile: Profile | null;
+  readonly doses: readonly DoseChange[];
+}
+
 function SectionLabel({ children }: { readonly children: string }) {
   const theme = useTheme();
   return (
@@ -47,23 +52,18 @@ function SectionLabel({ children }: { readonly children: string }) {
 
 export default function Settings() {
   const theme = useTheme();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [doses, setDoses] = useState<readonly DoseChange[]>([]);
+  const { data, setData, refresh } = useFocusLoad<SettingsData>(
+    async () => {
+      const [loadedProfile, loadedDoses] = await Promise.all([loadProfile(), loadDoseChanges()]);
+      return { profile: loadedProfile, doses: loadedDoses };
+    },
+    { profile: null, doses: [] },
+  );
+  const { profile, doses } = data;
   const [newAmount, setNewAmount] = useState('');
   const [newUnit, setNewUnit] = useState<DoseUnit>('mg');
   const [newNote, setNewNote] = useState('');
   const [busy, setBusy] = useState(false);
-
-  const refresh = useCallback((): void => {
-    Promise.all([loadProfile(), loadDoseChanges()])
-      .then(([loadedProfile, loadedDoses]) => {
-        setProfile(loadedProfile);
-        setDoses(loadedDoses);
-      })
-      .catch(() => undefined);
-  }, []);
-
-  useFocusEffect(refresh);
 
   if (profile === null) {
     return <View style={[styles.container, { backgroundColor: theme.background }]} />;
@@ -71,7 +71,7 @@ export default function Settings() {
   const currentProfile = profile;
 
   const updateProfile = (next: Profile): void => {
-    setProfile(next);
+    setData((s) => ({ ...s, profile: next }));
     saveProfile(next).catch(() => undefined);
   };
 
@@ -88,7 +88,7 @@ export default function Settings() {
       ...(trimmedNote !== '' ? { note: trimmedNote } : {}),
     };
     const nextDoses = await appendDoseChange(change);
-    setDoses(nextDoses);
+    setData((s) => ({ ...s, doses: nextDoses }));
     updateProfile({ ...currentProfile, currentDose: change.dose });
     setNewAmount('');
     setNewNote('');
