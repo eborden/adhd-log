@@ -72,6 +72,8 @@ strictness flag above still applies in full to our own source.
 - `app/` — expo-router routes (tabs: Today / Trends / History / Settings; plus `checkin`,
   `entry/[date]`, onboarding).
 - `components/` — thin, presentational (ScaleSelector, Chips, Toggle, Stepper, LockScreen).
+- `hooks/` — React/expo-router hooks shared across routes (`useFocusLoad`). Not RN-free, so
+  these live here rather than in `lib/` and are not unit-tested under the node Vitest setup.
 - `lib/` — `types`, `schema` (metric discriminated union — single source of truth for
   check-in fields), `checkin` (RN-free `Draft` state + session construction from the schema),
   `storage`, `notifications`, `export`, `tokens` (design primitives) → `theme` (semantic
