@@ -48,6 +48,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "apk": "node scripts/build-apk.mjs",
+    "apk:clean": "node scripts/build-apk.mjs --clean",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",

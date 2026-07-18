@@ -14,6 +14,7 @@ export default defineConfig(
       'coverage/**',
       'android/**',
       'ios/**',
+      'scripts/**',
       'expo-env.d.ts',
     ],
   },

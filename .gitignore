@@ -40,6 +40,9 @@ yarn-error.*
 /ios
 /android
 
+# build-apk.mjs native-input baseline (per-machine; tracks when a clean rebuild is needed)
+.native-fingerprint
+
 # coverage
 coverage/
 
