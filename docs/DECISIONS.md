@@ -3,6 +3,37 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Fix dose-restore data loss; extract `restoreBackup` (2026-07-18)
+
+**Problem:** `handleImportJson` in `app/(tabs)/settings.tsx` restored a JSON backup but only
+set the imported dose changes into React state (`setDoses`) — it never persisted them
+(`saveDoseChanges` wasn't even imported). Profile and entries were written; doses were not. On
+the next launch `loadDoseChanges` read the _old_ `doses` key, so all imported dose-change
+history was silently lost — exactly the titration data a provider-facing restore exists to
+recover — while the UI showed "Backup restored" regardless. Root cause: multi-key
+data-integrity orchestration was hand-inlined in a screen, untested, and easy to get subtly
+wrong.
+
+**Decision:** Move the "write all three keys together" concern into the RN-free, unit-tested
+storage layer and have the screen call it.
+
+- Added `restoreBackup(backup: Backup)` to `lib/storage.ts`: writes profile + doses + entries
+  via `Promise.all` (consistency-on-success; AsyncStorage has no real transactions and this is
+  a single-user local-only app). A `null` profile is skipped, preserving the existing profile —
+  matching the prior import UI's contract.
+- `lib/storage.ts` imports `Backup` from `lib/export.ts` as a **type-only** import, so no
+  runtime import cycle is introduced (`export.ts` already imports guards from `storage.ts`).
+- `app/(tabs)/settings.tsx`'s `handleImportJson` now calls `await restoreBackup(result.value)`
+  then `refresh()` (reloads from disk so the UI reflects what was actually persisted, instead
+  of hand-setting `setDoses`/`updateProfile`). The "Backup restored" alert only fires on
+  success. `saveEntries` is no longer imported here.
+- Tests (`lib/__tests__/storage.test.ts`): `restoreBackup` persists all three keys; a `null`
+  profile leaves the existing profile untouched; and a `buildBackup → restoreBackup → load*`
+  round-trip returns equal data (the exact regression).
+
+**Non-goals:** no schema-version envelope, no transactional/rollback guarantees beyond
+`Promise.all`. Supersedes and closes `docs/pending/01-restore-backup.md`.
+
 ## Visual refresh + layered design tokens (2026-07-18)
 
 **Problem:** The UI read as sterile/stock — fully flat, hairline borders everywhere, an
