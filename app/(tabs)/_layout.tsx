@@ -1,5 +1,17 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import type { ColorValue } from 'react-native';
 import { useTheme } from '../../lib/theme';
+
+function TabIcon({
+  name,
+  color,
+}: {
+  readonly name: keyof typeof Ionicons.glyphMap;
+  readonly color: ColorValue;
+}) {
+  return <Ionicons name={name} size={24} color={color} />;
+}
 
 export default function TabsLayout() {
   const theme = useTheme();
@@ -14,10 +26,34 @@ export default function TabsLayout() {
         headerTintColor: theme.text,
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Today' }} />
-      <Tabs.Screen name="trends" options={{ title: 'Trends' }} />
-      <Tabs.Screen name="history" options={{ title: 'History' }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Today',
+          tabBarIcon: ({ color }) => <TabIcon name="today-outline" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="trends"
+        options={{
+          title: 'Trends',
+          tabBarIcon: ({ color }) => <TabIcon name="trending-up-outline" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="history"
+        options={{
+          title: 'History',
+          tabBarIcon: ({ color }) => <TabIcon name="time-outline" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color }) => <TabIcon name="settings-outline" color={color} />,
+        }}
+      />
     </Tabs>
   );
 }
