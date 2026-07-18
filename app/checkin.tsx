@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Button } from '../components/Button';
 import { Chips } from '../components/Chips';
@@ -93,6 +103,11 @@ export default function Checkin() {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [notesExpanded, setNotesExpanded] = useState(false);
+  const insets = useSafeAreaInsets();
+  // The check-in screen has a navigation header; KeyboardAvoidingView needs its
+  // height as an offset or it under-adjusts and the keyboard covers lower fields.
+  const headerOffset = insets.top + (Platform.OS === 'ios' ? 44 : 56);
 
   useEffect(() => {
     loadEntries()
@@ -218,7 +233,23 @@ export default function Checkin() {
             }}
           />
         );
-      case 'text':
+      case 'text': {
+        const showNotes = notesExpanded || draft.notes !== '';
+        if (!showNotes) {
+          return (
+            <Pressable
+              key={metric.key}
+              accessibilityRole="button"
+              onPress={() => {
+                setNotesExpanded(true);
+              }}
+              style={styles.addNotes}
+            >
+              <Ionicons name="add" size={20} color={theme.accent} />
+              <Text style={[typography.bodyStrong, { color: theme.accent }]}>Add notes</Text>
+            </Pressable>
+          );
+        }
         return (
           <View key={metric.key} style={styles.textField}>
             <Text style={[typography.bodyStrong, styles.textLabel, { color: theme.text }]}>
@@ -230,6 +261,7 @@ export default function Checkin() {
                 setDraft({ ...draft, notes: text });
               }}
               multiline
+              autoFocus={notesExpanded}
               placeholder="Optional"
               placeholderTextColor={theme.textMuted}
               style={[
@@ -240,6 +272,7 @@ export default function Checkin() {
             />
           </View>
         );
+      }
       default:
         return assertNever(metric);
     }
@@ -263,30 +296,41 @@ export default function Checkin() {
           ),
         }}
       />
-      <ScrollView
-        style={{ backgroundColor: theme.background }}
-        contentContainerStyle={styles.content}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={headerOffset}
       >
-        {metrics.map(renderMetric)}
-        <Button
-          label="Save"
-          disabled={!isComplete || saving}
-          style={styles.saveButton}
-          onPress={() => {
-            setSaving(true);
-            handleSave()
-              .catch(() => undefined)
-              .finally(() => {
-                setSaving(false);
-              });
-          }}
-        />
-      </ScrollView>
+        <ScrollView
+          style={{ backgroundColor: theme.background }}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
+          {metrics.map(renderMetric)}
+          <Button
+            label="Save"
+            disabled={!isComplete || saving}
+            style={styles.saveButton}
+            onPress={() => {
+              setSaving(true);
+              handleSave()
+                .catch(() => undefined)
+                .finally(() => {
+                  setSaving(false);
+                });
+            }}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   headerTitle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -294,8 +338,16 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: space.xl,
+    paddingBottom: space.xxxl,
   },
   textField: {
+    marginBottom: space.xl,
+  },
+  addNotes: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    paddingVertical: space.sm,
     marginBottom: space.xl,
   },
   textLabel: {
