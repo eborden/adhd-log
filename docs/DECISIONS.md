@@ -3,6 +3,41 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Tolerant entry parsing + no destructive overwrite (2026-07-18)
+
+**Problem:** For an app whose value is data that accretes over weeks, the read path could turn
+one bad record into total loss. `isEntries`/`loadEntries` were all-or-nothing: a single
+malformed day (a bug, a partial write, a hand-edited backup) failed the whole map and
+`loadEntries` returned `{}` — indistinguishable from a fresh install. Then `saveCheckin` did
+`loadEntries()` → merge one day → `saveEntries({ ...entries, [date]: merged })`, so the next
+check-in **overwrote the entire `entries` blob with a single day**, destroying recoverable
+history. `loadDoseChanges` had the same all-or-nothing shape.
+
+**Decision:** Parse per-record and never clobber an unreadable store.
+
+- `lib/storage.ts` gains `parseEntriesTolerant(raw): EntriesParse` (`{ entries, droppedKeys,
+hardFailure }`) — keeps the days that pass `isDayEntry`, lists the keys it dropped, and flags
+  `hardFailure` when the raw value isn't even an object.
+- A private `loadEntriesRaw()` reads the raw string and distinguishes three cases: absent
+  (`rawString === null`, genuinely empty), unparseable JSON or non-object (`hardFailure`), and
+  parseable (tolerant per-day parse). `loadEntries()` keeps its signature and returns the
+  survivors, so read-only screens (Today/History/Trends/Entry) are unchanged.
+- `saveCheckin` now reads via `loadEntriesRaw()`: on `hardFailure` it **quarantines** the raw
+  blob to `entries.corrupt.<isoTimestampNow()>` and **throws** (aborting the write) rather than
+  merging onto `{}`; on a partial failure it quarantines the blob, then safely merges today's
+  entry onto the survivors. The throw is swallowed by the check-in screen's existing `.catch`,
+  so it degrades to "save didn't happen," no crash.
+- `loadDoseChanges` filters per element (`raw.filter(isDoseChange)`) so one bad change doesn't
+  wipe the dose timeline.
+- The test-only async-storage mock gained `getAllKeys` (a real AsyncStorage API) to assert the
+  quarantine key. Tests cover tolerant parse, hard-failure abort + quarantine, empty-store
+  success, partial-merge survivorship, and dose-list drop.
+
+**Non-goals honored:** no `{v:1, data}` schema-version envelope (the guards already tolerate
+additive optional fields; deferred until metrics start changing) and no user-facing error
+banner — the quarantine + no-clobber logic is the real protection. Supersedes and closes
+`docs/pending/03-tolerant-entry-parsing.md`.
+
 ## Schema-drive the check-in write and detail-read paths (2026-07-18)
 
 **Problem:** The check-in _render_ path was schema-driven and exhaustive (`renderMetric` in
