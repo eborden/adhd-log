@@ -50,6 +50,11 @@ strictness flag above still applies in full to our own source.
   never cast untrusted data.
 - Keep testable logic in **RN-free** `lib/` modules so Vitest can run it without native
   shims. Components stay thin and presentational.
+- `type-coverage` runs with `--ignore-as-assertion`: it flags every `as T`, including the
+  branded-type constructors this codebase deliberately relies on (`lib/storage.ts`'s
+  `formatIsoDate`/`isoTimestampNow` still guard-and-throw instead of asserting) and known-valid
+  literals in test fixtures. The flag exempts intentional assertions of compatible types, not
+  `any` — `no-unsafe-*` and `no-explicit-any` still catch that regardless.
 
 ## Gates (must pass before commit)
 

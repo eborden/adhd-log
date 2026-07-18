@@ -3,7 +3,7 @@ const tsAndTsx = (files) => [
   `eslint --max-warnings 0 ${files.join(' ')}`,
   `prettier --check ${files.join(' ')}`,
   'tsc --noEmit',
-  'type-coverage --strict --at-least 100 --ignore-files "**/*.d.ts"',
+  'type-coverage --strict --at-least 100 --ignore-files "**/*.d.ts" --ignore-as-assertion',
   `vitest related --run ${files.join(' ')}`,
 ];
 

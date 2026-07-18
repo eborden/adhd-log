@@ -1,9 +1,17 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+
+function mock(name: string): string {
+  return fileURLToPath(new URL(`./lib/__mocks__/${name}.ts`, import.meta.url));
+}
 
 export default defineConfig({
   resolve: {
     alias: {
       '@react-native-async-storage/async-storage': '@react-native-async-storage/async-storage/jest',
+      'expo-print': mock('expo-print'),
+      'expo-sharing': mock('expo-sharing'),
+      'expo-file-system': mock('expo-file-system'),
     },
   },
   test: {

@@ -54,5 +54,13 @@ export default defineConfig(
       'eslint-comments/no-unused-disable': 'error',
     },
   },
+  {
+    // Test-only stand-ins for native modules — shaped to match the real
+    // package's class-based API, which is naturally stub-heavy.
+    files: ['lib/__mocks__/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-extraneous-class': 'off',
+    },
+  },
   eslintConfigPrettier,
 );
