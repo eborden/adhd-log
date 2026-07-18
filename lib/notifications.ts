@@ -23,6 +23,21 @@ const NOTIFICATION_IDS = {
   evening: 'adhd-log-evening-reminder',
 } as const;
 
+// Android (API 26+) drops any notification not tied to a channel — the fallback
+// "Miscellaneous" channel expo-notifications auto-creates is low-importance, so
+// scheduled reminders arrive silently or get suppressed by OEM battery managers.
+// We create our own high-importance channel and attach it to every scheduled
+// trigger so reminders actually surface. No-op on iOS.
+const ANDROID_CHANNEL_ID = 'adhd-log-reminders';
+
+async function ensureAndroidChannel(notifications: NotificationsModule): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+    name: 'Check-in reminders',
+    importance: notifications.AndroidImportance.HIGH,
+  });
+}
+
 export async function configureNotificationHandler(): Promise<void> {
   const notifications = await loadNotifications();
   if (notifications === null) return;
@@ -35,6 +50,7 @@ export async function configureNotificationHandler(): Promise<void> {
         shouldSetBadge: false,
       }),
   });
+  await ensureAndroidChannel(notifications);
 }
 
 export async function requestNotificationPermissions(): Promise<boolean> {
@@ -62,6 +78,7 @@ async function scheduleDaily(
       type: notifications.SchedulableTriggerInputTypes.DAILY,
       hour: time.hour,
       minute: time.minute,
+      channelId: ANDROID_CHANNEL_ID,
     },
   });
 }
@@ -69,6 +86,7 @@ async function scheduleDaily(
 export async function scheduleReminders(profile: Profile): Promise<void> {
   const notifications = await loadNotifications();
   if (notifications === null) return;
+  await ensureAndroidChannel(notifications);
   await scheduleDaily(
     notifications,
     NOTIFICATION_IDS.morning,
