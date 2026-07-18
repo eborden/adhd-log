@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { Button } from '../../components/Button';
+import { Card } from '../../components/Card';
 import { Stepper } from '../../components/Stepper';
 import { Toggle } from '../../components/Toggle';
 import {
@@ -29,10 +31,19 @@ import {
   saveProfile,
   todayIsoDate,
 } from '../../lib/storage';
-import { useTheme } from '../../lib/theme';
+import { radius, space, typography, useTheme } from '../../lib/theme';
 import type { DoseChange, DoseUnit, Profile } from '../../lib/types';
 
 const DOSE_UNITS: readonly DoseUnit[] = ['mg', 'mcg', 'mL'];
+
+function SectionLabel({ children }: { readonly children: string }) {
+  const theme = useTheme();
+  return (
+    <Text style={[typography.sectionLabel, styles.sectionLabel, { color: theme.textMuted }]}>
+      {children}
+    </Text>
+  );
+}
 
 export default function Settings() {
   const theme = useTheme();
@@ -57,6 +68,7 @@ export default function Settings() {
   if (profile === null) {
     return <View style={[styles.container, { backgroundColor: theme.background }]} />;
   }
+  const currentProfile = profile;
 
   const updateProfile = (next: Profile): void => {
     setProfile(next);
@@ -77,7 +89,7 @@ export default function Settings() {
     };
     const nextDoses = await appendDoseChange(change);
     setDoses(nextDoses);
-    updateProfile({ ...profile, currentDose: change.dose });
+    updateProfile({ ...currentProfile, currentDose: change.dose });
     setNewAmount('');
     setNewNote('');
   };
@@ -85,7 +97,7 @@ export default function Settings() {
   const handleReminderChange = (session: 'morning' | 'evening', hour: number): void => {
     if (!isHour(hour)) return;
     const next: Profile = {
-      ...profile,
+      ...currentProfile,
       ...(session === 'morning'
         ? { morningReminder: { hour, minute: 0 } }
         : { eveningReminder: { hour, minute: 0 } }),
@@ -102,7 +114,7 @@ export default function Settings() {
       const [entries, currentDoses] = await Promise.all([loadEntries(), loadDoseChanges()]);
       const dates = lastNDates(30, todayIsoDate());
       const rows = rowsInRange(entries, dates);
-      const html = buildReportHtml(profile, currentDoses, rows);
+      const html = buildReportHtml(currentProfile, currentDoses, rows);
       await exportPdfReport(html);
     } catch {
       Alert.alert('Could not export the PDF report.');
@@ -115,7 +127,7 @@ export default function Settings() {
     setBusy(true);
     try {
       const [entries, currentDoses] = await Promise.all([loadEntries(), loadDoseChanges()]);
-      const backup = buildBackup(profile, currentDoses, entries);
+      const backup = buildBackup(currentProfile, currentDoses, entries);
       await exportJsonBackup(backup);
     } catch {
       Alert.alert('Could not export the JSON backup.');
@@ -150,176 +162,186 @@ export default function Settings() {
     }
   };
 
+  const enabledKeys = enabledEveningMetricKeys(currentProfile);
+
   return (
     <ScrollView
       style={{ backgroundColor: theme.background }}
       contentContainerStyle={styles.content}
     >
-      <Text style={[styles.section, { color: theme.text }]}>Medication</Text>
-      <Text style={[styles.body, { color: theme.text }]}>{profile.medName}</Text>
-      <Text style={{ color: theme.textMuted, marginBottom: 16 }}>
-        Current dose: {profile.currentDose.amount}
-        {profile.currentDose.unit} · started {profile.startDate}
-      </Text>
+      <SectionLabel>Medication</SectionLabel>
+      <Card style={styles.section}>
+        <Text style={[typography.cardTitle, { color: theme.text }]}>{currentProfile.medName}</Text>
+        <Text style={[typography.caption, styles.caption, { color: theme.textMuted }]}>
+          Current dose: {currentProfile.currentDose.amount}
+          {currentProfile.currentDose.unit} · started {currentProfile.startDate}
+        </Text>
 
-      <Text style={[styles.label, { color: theme.text }]}>Log a dose change</Text>
-      <View style={styles.doseRow}>
+        <Text style={[typography.bodyStrong, styles.fieldLabel, { color: theme.text }]}>
+          Log a dose change
+        </Text>
+        <View style={styles.doseRow}>
+          <TextInput
+            value={newAmount}
+            onChangeText={setNewAmount}
+            placeholder="Amount"
+            placeholderTextColor={theme.textMuted}
+            keyboardType="decimal-pad"
+            style={[
+              typography.body,
+              styles.input,
+              styles.amountInput,
+              { color: theme.text, backgroundColor: theme.surfaceMuted },
+            ]}
+          />
+          <View style={styles.unitRow}>
+            {DOSE_UNITS.map((option) => {
+              const active = option === newUnit;
+              return (
+                <Pressable
+                  key={option}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setNewUnit(option);
+                  }}
+                  style={[
+                    styles.unitChip,
+                    { backgroundColor: active ? theme.accentSoft : theme.surfaceMuted },
+                  ]}
+                >
+                  <Text style={[typography.caption, { color: active ? theme.accent : theme.text }]}>
+                    {option}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
         <TextInput
-          value={newAmount}
-          onChangeText={setNewAmount}
-          placeholder="Amount"
+          value={newNote}
+          onChangeText={setNewNote}
+          placeholder="Note (optional)"
           placeholderTextColor={theme.textMuted}
-          keyboardType="decimal-pad"
           style={[
+            typography.body,
             styles.input,
-            styles.amountInput,
-            { color: theme.text, borderColor: theme.border },
+            styles.noteInput,
+            { color: theme.text, backgroundColor: theme.surfaceMuted },
           ]}
         />
-        <View style={styles.unitRow}>
-          {DOSE_UNITS.map((option) => {
-            const active = option === newUnit;
-            return (
-              <Pressable
-                key={option}
-                accessibilityRole="button"
-                onPress={() => {
-                  setNewUnit(option);
-                }}
-                style={[
-                  styles.unitChip,
-                  {
-                    backgroundColor: active ? theme.accent : theme.surface,
-                    borderColor: theme.border,
-                  },
-                ]}
-              >
-                <Text style={{ color: active ? '#FFFFFF' : theme.text }}>{option}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-      <TextInput
-        value={newNote}
-        onChangeText={setNewNote}
-        placeholder="Note (optional)"
-        placeholderTextColor={theme.textMuted}
-        style={[styles.input, { color: theme.text, borderColor: theme.border, marginBottom: 12 }]}
-      />
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => {
-          handleLogDoseChange().catch(() => undefined);
-        }}
-        style={[styles.secondaryButton, { borderColor: theme.border }]}
-      >
-        <Text style={{ color: theme.text, fontWeight: '600' }}>Save dose change</Text>
-      </Pressable>
+        <Button
+          label="Save dose change"
+          variant="secondary"
+          onPress={() => {
+            handleLogDoseChange().catch(() => undefined);
+          }}
+        />
 
-      {doses.length > 0 ? (
-        <View style={styles.doseLog}>
-          {doses
-            .slice()
-            .reverse()
-            .map((change) => (
-              <Text
-                key={`${change.date}-${String(change.dose.amount)}`}
-                style={{ color: theme.textMuted }}
-              >
-                {change.date}: {change.dose.amount}
-                {change.dose.unit}
-                {change.note !== undefined ? ` — ${change.note}` : ''}
-              </Text>
-            ))}
-        </View>
-      ) : null}
+        {doses.length > 0 ? (
+          <View style={styles.doseLog}>
+            {doses
+              .slice()
+              .reverse()
+              .map((change) => (
+                <Text
+                  key={`${change.date}-${String(change.dose.amount)}`}
+                  style={[typography.caption, { color: theme.textMuted }]}
+                >
+                  {change.date}: {change.dose.amount}
+                  {change.dose.unit}
+                  {change.note !== undefined ? ` — ${change.note}` : ''}
+                </Text>
+              ))}
+          </View>
+        ) : null}
+      </Card>
 
-      <Text style={[styles.section, { color: theme.text }]}>Reminders</Text>
-      <Stepper
-        label="Morning (hour, 24h)"
-        value={profile.morningReminder.hour}
-        min={0}
-        max={23}
-        step={1}
-        onChange={(hour) => {
-          handleReminderChange('morning', hour);
-        }}
-      />
-      <Stepper
-        label="Evening (hour, 24h)"
-        value={profile.eveningReminder.hour}
-        min={0}
-        max={23}
-        step={1}
-        onChange={(hour) => {
-          handleReminderChange('evening', hour);
-        }}
-      />
+      <SectionLabel>Reminders</SectionLabel>
+      <Card style={styles.section}>
+        <Stepper
+          label="Morning (hour, 24h)"
+          value={currentProfile.morningReminder.hour}
+          min={0}
+          max={23}
+          step={1}
+          onChange={(hour) => {
+            handleReminderChange('morning', hour);
+          }}
+        />
+        <Stepper
+          label="Evening (hour, 24h)"
+          value={currentProfile.eveningReminder.hour}
+          min={0}
+          max={23}
+          step={1}
+          onChange={(hour) => {
+            handleReminderChange('evening', hour);
+          }}
+        />
+      </Card>
 
-      <Text style={[styles.section, { color: theme.text }]}>Evening check-in</Text>
-      <Text style={{ color: theme.textMuted, marginBottom: 12 }}>
-        Choose which ratings show up in your evening check-in.
-      </Text>
-      {EVENING_METRICS.map((metric) => {
-        if (metric.kind !== 'scale' || !isEveningRatingKey(metric.key)) return null;
-        const key = metric.key;
-        const enabledKeys = enabledEveningMetricKeys(profile);
-        return (
-          <Toggle
-            key={key}
-            label={metric.label}
-            value={enabledKeys.includes(key)}
-            onChange={(isEnabled) => {
-              updateProfile({
-                ...profile,
-                enabledEveningMetrics: withEveningMetricToggled(enabledKeys, key, isEnabled),
-              });
-            }}
-          />
-        );
-      })}
+      <SectionLabel>Evening check-in</SectionLabel>
+      <Card style={styles.section}>
+        <Text style={[typography.caption, styles.caption, { color: theme.textMuted }]}>
+          Choose which ratings show up in your evening check-in.
+        </Text>
+        {EVENING_METRICS.map((metric) => {
+          if (metric.kind !== 'scale' || !isEveningRatingKey(metric.key)) return null;
+          const key = metric.key;
+          return (
+            <Toggle
+              key={key}
+              label={metric.label}
+              value={enabledKeys.includes(key)}
+              onChange={(isEnabled) => {
+                updateProfile({
+                  ...currentProfile,
+                  enabledEveningMetrics: withEveningMetricToggled(enabledKeys, key, isEnabled),
+                });
+              }}
+            />
+          );
+        })}
+      </Card>
 
-      <Text style={[styles.section, { color: theme.text }]}>Privacy</Text>
-      <Toggle
-        label="Require Face ID / passcode to open"
-        value={profile.lockEnabled}
-        onChange={(lockEnabled) => {
-          updateProfile({ ...profile, lockEnabled });
-        }}
-      />
+      <SectionLabel>Privacy</SectionLabel>
+      <Card style={styles.section}>
+        <Toggle
+          label="Require Face ID / passcode to open"
+          value={currentProfile.lockEnabled}
+          onChange={(lockEnabled) => {
+            updateProfile({ ...currentProfile, lockEnabled });
+          }}
+        />
+      </Card>
 
-      <Text style={[styles.section, { color: theme.text }]}>Export</Text>
-      <Pressable
-        accessibilityRole="button"
-        disabled={busy}
-        onPress={() => {
-          handleExportPdf().catch(() => undefined);
-        }}
-        style={[styles.secondaryButton, { borderColor: theme.border }]}
-      >
-        <Text style={{ color: theme.text, fontWeight: '600' }}>Export PDF report (30 days)</Text>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        disabled={busy}
-        onPress={() => {
-          handleExportJson().catch(() => undefined);
-        }}
-        style={[styles.secondaryButton, { borderColor: theme.border }]}
-      >
-        <Text style={{ color: theme.text, fontWeight: '600' }}>Export JSON backup</Text>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        disabled={busy}
-        onPress={() => {
-          handleImportJson().catch(() => undefined);
-        }}
-        style={[styles.secondaryButton, { borderColor: theme.border }]}
-      >
-        <Text style={{ color: theme.text, fontWeight: '600' }}>Import JSON backup</Text>
-      </Pressable>
+      <SectionLabel>Export</SectionLabel>
+      <Card style={[styles.section, styles.exportGroup]}>
+        <Button
+          label="Export PDF report (30 days)"
+          variant="secondary"
+          disabled={busy}
+          onPress={() => {
+            handleExportPdf().catch(() => undefined);
+          }}
+        />
+        <Button
+          label="Export JSON backup"
+          variant="secondary"
+          disabled={busy}
+          onPress={() => {
+            handleExportJson().catch(() => undefined);
+          }}
+        />
+        <Button
+          label="Import JSON backup"
+          variant="secondary"
+          disabled={busy}
+          onPress={() => {
+            handleImportJson().catch(() => undefined);
+          }}
+        />
+      </Card>
     </ScrollView>
   );
 }
@@ -329,57 +351,55 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 20,
+    padding: space.xl,
+  },
+  sectionLabel: {
+    marginTop: space.xl,
+    marginBottom: space.sm,
   },
   section: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 24,
-    marginBottom: 12,
+    marginBottom: space.xs,
   },
-  body: {
-    fontSize: 16,
-    fontWeight: '600',
+  caption: {
+    marginTop: space.xs,
+    marginBottom: space.md,
   },
-  label: {
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 8,
+  fieldLabel: {
+    marginTop: space.md,
+    marginBottom: space.sm,
   },
   input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
+  },
+  noteInput: {
+    marginBottom: space.md,
   },
   doseRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
+    gap: space.md,
+    marginBottom: space.md,
   },
   amountInput: {
     flex: 1,
   },
   unitRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: space.sm,
   },
   unitChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  secondaryButton: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 12,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
+    borderRadius: radius.pill,
     alignItems: 'center',
-    marginBottom: 10,
+    justifyContent: 'center',
   },
   doseLog: {
-    marginTop: 12,
-    gap: 4,
+    marginTop: space.md,
+    gap: space.xs,
+  },
+  exportGroup: {
+    gap: space.sm,
   },
 });

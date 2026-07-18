@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Rating, ScaleDirection } from '../lib/types';
-import { ratingColor, useTheme } from '../lib/theme';
+import { radius, ratingColor, space, typography, useTheme } from '../lib/theme';
 
 const RATINGS: readonly Rating[] = [1, 2, 3, 4, 5];
 
@@ -25,11 +25,11 @@ export function ScaleSelector({
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: theme.text }]}>{label}</Text>
+      <Text style={[typography.bodyStrong, styles.label, { color: theme.text }]}>{label}</Text>
       <View style={styles.row}>
         {RATINGS.map((rating) => {
           const selected = value === rating;
-          const background = selected ? ratingColor(theme, rating, direction) : theme.surface;
+          const background = selected ? ratingColor(theme, rating, direction) : theme.surfaceMuted;
           return (
             <Pressable
               key={rating}
@@ -39,9 +39,11 @@ export function ScaleSelector({
               onPress={() => {
                 onChange(rating);
               }}
-              style={[styles.button, { backgroundColor: background, borderColor: theme.border }]}
+              style={[styles.button, { backgroundColor: background }]}
             >
-              <Text style={[styles.buttonText, { color: selected ? '#FFFFFF' : theme.text }]}>
+              <Text
+                style={[typography.cardTitle, { color: selected ? theme.onAccent : theme.text }]}
+              >
                 {rating}
               </Text>
             </Pressable>
@@ -49,8 +51,8 @@ export function ScaleSelector({
         })}
       </View>
       <View style={styles.endsRow}>
-        <Text style={[styles.endLabel, { color: theme.textMuted }]}>{low}</Text>
-        <Text style={[styles.endLabel, { color: theme.textMuted }]}>{high}</Text>
+        <Text style={[typography.caption, { color: theme.textMuted }]}>{low}</Text>
+        <Text style={[typography.caption, { color: theme.textMuted }]}>{high}</Text>
       </View>
     </View>
   );
@@ -58,36 +60,26 @@ export function ScaleSelector({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
+    marginBottom: space.xl,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
+    marginBottom: space.md,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: space.sm,
   },
   button: {
     flex: 1,
     aspectRatio: 1,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  buttonText: {
-    fontSize: 18,
-    fontWeight: '700',
   },
   endsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  endLabel: {
-    fontSize: 12,
+    marginTop: space.sm,
   },
 });

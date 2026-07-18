@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
+import { Button } from '../components/Button';
 import { Stepper } from '../components/Stepper';
 import { Toggle } from '../components/Toggle';
 import { requestNotificationPermissions, scheduleReminders } from '../lib/notifications';
@@ -12,7 +13,7 @@ import {
   saveProfile,
   todayIsoDate,
 } from '../lib/storage';
-import { useTheme } from '../lib/theme';
+import { radius, space, typography, useTheme } from '../lib/theme';
 import type { DoseUnit, Profile } from '../lib/types';
 
 const DOSE_UNITS: readonly DoseUnit[] = ['mg', 'mcg', 'mL'];
@@ -66,22 +67,30 @@ export default function Onboarding() {
       style={{ backgroundColor: theme.background }}
       contentContainerStyle={styles.content}
     >
-      <Text style={[styles.title, { color: theme.text }]}>Let's set things up</Text>
-      <Text style={[styles.subtitle, { color: theme.textMuted }]}>
+      <Text style={[typography.title, styles.title, { color: theme.text }]}>
+        Let's set things up
+      </Text>
+      <Text style={[typography.caption, styles.subtitle, { color: theme.textMuted }]}>
         Everything stays on this device. This isn't medical advice — it's a log to bring to your
         provider.
       </Text>
 
-      <Text style={[styles.label, { color: theme.text }]}>Medication name</Text>
+      <Text style={[typography.bodyStrong, styles.label, { color: theme.text }]}>
+        Medication name
+      </Text>
       <TextInput
         value={medName}
         onChangeText={setMedName}
         placeholder="e.g. Atomoxetine"
         placeholderTextColor={theme.textMuted}
-        style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+        style={[
+          typography.body,
+          styles.input,
+          { color: theme.text, backgroundColor: theme.surfaceMuted },
+        ]}
       />
 
-      <Text style={[styles.label, { color: theme.text }]}>Current dose</Text>
+      <Text style={[typography.bodyStrong, styles.label, { color: theme.text }]}>Current dose</Text>
       <View style={styles.doseRow}>
         <TextInput
           value={amountText}
@@ -90,9 +99,10 @@ export default function Onboarding() {
           placeholderTextColor={theme.textMuted}
           keyboardType="decimal-pad"
           style={[
+            typography.body,
             styles.input,
             styles.amountInput,
-            { color: theme.text, borderColor: theme.border },
+            { color: theme.text, backgroundColor: theme.surfaceMuted },
           ]}
         />
         <View style={styles.unitRow}>
@@ -107,13 +117,12 @@ export default function Onboarding() {
                 }}
                 style={[
                   styles.unitChip,
-                  {
-                    backgroundColor: active ? theme.accent : theme.surface,
-                    borderColor: theme.border,
-                  },
+                  { backgroundColor: active ? theme.accentSoft : theme.surfaceMuted },
                 ]}
               >
-                <Text style={{ color: active ? '#FFFFFF' : theme.text }}>{option}</Text>
+                <Text style={[typography.body, { color: active ? theme.accent : theme.text }]}>
+                  {option}
+                </Text>
               </Pressable>
             );
           })}
@@ -150,54 +159,47 @@ export default function Onboarding() {
         onChange={setLockEnabled}
       />
 
-      {error !== null ? <Text style={{ color: theme.bad, marginBottom: 12 }}>{error}</Text> : null}
+      {error !== null ? (
+        <Text style={[typography.body, styles.error, { color: theme.bad }]}>{error}</Text>
+      ) : null}
 
-      <Pressable
-        accessibilityRole="button"
+      <Button
+        label="Get started"
         disabled={!canSubmit}
+        style={styles.submit}
         onPress={() => {
           handleSubmit().catch(() => {
             setError('Something went wrong saving your profile.');
           });
         }}
-        style={[styles.submit, { backgroundColor: canSubmit ? theme.accent : theme.border }]}
-      >
-        <Text style={styles.submitText}>Get started</Text>
-      </Pressable>
+      />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   content: {
-    padding: 24,
+    padding: space.xxl,
     paddingTop: 64,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: space.sm,
   },
   subtitle: {
-    fontSize: 14,
-    marginBottom: 24,
+    marginBottom: space.xxl,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: space.sm,
   },
   input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    marginBottom: 20,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
+    marginBottom: space.xl,
   },
   doseRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: space.md,
     alignItems: 'flex-start',
   },
   amountInput: {
@@ -205,23 +207,19 @@ const styles = StyleSheet.create({
   },
   unitRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: space.sm,
   },
   unitChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  error: {
+    marginBottom: space.md,
   },
   submit: {
-    marginTop: 12,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  submitText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+    marginTop: space.md,
   },
 });

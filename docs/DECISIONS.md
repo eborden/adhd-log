@@ -3,6 +3,35 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Visual refresh + layered design tokens (2026-07-18)
+
+**Problem:** The UI read as sterile/stock — fully flat, hairline borders everywhere, an
+ad-hoc per-file type scale, raw `#FFFFFF` text literals on filled controls, and every
+size/color hardcoded inline.
+
+**Decision:** A "warm ink on deep paper" refresh built on a layered design-token system;
+components consume only tokens, never raw literals.
+
+- **Layer 1 — `lib/tokens.ts`** (pure data, no imports): `palette` (the only place raw
+  hexes live — warm neutral ramp, pine accent ramp, rating hues), `space`, `radius`,
+  `fontSize`, `fontWeight`, `letterSpacing`, `shadowPrimitive`.
+- **Layer 2 — `lib/theme.ts`**: semantic tokens mapping primitives per color scheme
+  (`Theme` gained `surfaceMuted`, `accentSoft`, `onAccent`, `controlKnob`); plus
+  `typography` roles (incl. an uppercase letter-spaced `sectionLabel`), `shadows.card`,
+  and re-exported `space`/`radius`. `useTheme()` resolves light/dark.
+- **Layer 3 — component tokens**: encapsulated in shared primitives `components/Card.tsx`
+  (soft shadow in light, hairline border in dark) and `components/Button.tsx`
+  (primary/secondary/disabled), plus the restyled controls.
+- Palette is warm/moody, accent is a deep pine green; selected chips/toggles use a tinted
+  `accentSoft` fill rather than full-saturation accent; cards carry depth via soft shadow
+  (light) with borders dropped.
+- Root Stack header themed (was a jarring white bar on check-in/entry); check-in header
+  shows the session's sun/moon icon.
+- `lib/export.ts` PDF report derives its colors from the same Layer-1 `palette` so the
+  report matches the app.
+- Dark-mode contrast: switch thumb uses a light `controlKnob` in both modes; `surfaceMuted`
+  was lightened so sunken fills/pills separate from cards.
+
 ## Colorize scale values on the day-detail history view (2026-07-18)
 
 **Decision:** The day-detail view (`app/entry/[date].tsx`, opened by tapping a day in

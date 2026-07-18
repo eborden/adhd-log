@@ -1,10 +1,29 @@
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Card } from '../../components/Card';
 import { SIDE_EFFECT_LABELS, directionForRatingKey } from '../../lib/schema';
 import { isIsoDate, loadEntries, todayIsoDate } from '../../lib/storage';
-import { ratingColor, useTheme } from '../../lib/theme';
+import { ratingColor, space, typography, useTheme } from '../../lib/theme';
 import type { DayEntry, IsoDate, Rating, RatingKey } from '../../lib/types';
+
+function DetailRow({
+  label,
+  value,
+  color,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly color?: string;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={styles.row}>
+      <Text style={[typography.body, { color: theme.textMuted }]}>{label}</Text>
+      <Text style={[typography.bodyStrong, { color: color ?? theme.text }]}>{value}</Text>
+    </View>
+  );
+}
 
 function RatingRow({
   label,
@@ -22,9 +41,26 @@ function RatingRow({
       ? ratingColor(theme, value, direction)
       : theme.text;
   return (
-    <View style={styles.row}>
-      <Text style={{ color: theme.textMuted }}>{label}</Text>
-      <Text style={{ color: valueColor, fontWeight: '600' }}>{value ?? '—'}</Text>
+    <DetailRow label={label} value={value === undefined ? '—' : String(value)} color={valueColor} />
+  );
+}
+
+function SectionHeader({
+  title,
+  action,
+  onPress,
+}: {
+  readonly title: string;
+  readonly action: string;
+  readonly onPress: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={styles.sectionHeader}>
+      <Text style={[typography.sectionLabel, { color: theme.textMuted }]}>{title}</Text>
+      <Pressable accessibilityRole="button" onPress={onPress}>
+        <Text style={[typography.bodyStrong, { color: theme.accent }]}>{action}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -53,22 +89,16 @@ export default function Entry() {
       style={{ backgroundColor: theme.background }}
       contentContainerStyle={styles.content}
     >
-      <Text style={[styles.title, { color: theme.text }]}>{date}</Text>
+      <Text style={[typography.title, styles.title, { color: theme.text }]}>{date}</Text>
 
-      <View style={[styles.section, { borderColor: theme.border }]}>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Morning</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              router.push({ pathname: '/checkin', params: { session: 'morning', date } });
-            }}
-          >
-            <Text style={{ color: theme.accent, fontWeight: '600' }}>
-              {morning !== undefined ? 'Edit' : 'Log'}
-            </Text>
-          </Pressable>
-        </View>
+      <Card style={styles.section}>
+        <SectionHeader
+          title="Morning"
+          action={morning !== undefined ? 'Edit' : 'Log'}
+          onPress={() => {
+            router.push({ pathname: '/checkin', params: { session: 'morning', date } });
+          }}
+        />
         {morning !== undefined ? (
           <>
             <RatingRow
@@ -77,38 +107,24 @@ export default function Entry() {
               value={morning.sleepQuality}
             />
             <RatingRow label="Waking mood" metricKey="wakingMood" value={morning.wakingMood} />
-            <View style={styles.row}>
-              <Text style={{ color: theme.textMuted }}>Took dose</Text>
-              <Text style={{ color: theme.text, fontWeight: '600' }}>
-                {morning.doseTaken ? 'Yes' : 'No'}
-              </Text>
-            </View>
+            <DetailRow label="Took dose" value={morning.doseTaken ? 'Yes' : 'No'} />
             {morning.sleepHours !== undefined ? (
-              <View style={styles.row}>
-                <Text style={{ color: theme.textMuted }}>Hours slept</Text>
-                <Text style={{ color: theme.text, fontWeight: '600' }}>{morning.sleepHours}</Text>
-              </View>
+              <DetailRow label="Hours slept" value={String(morning.sleepHours)} />
             ) : null}
           </>
         ) : (
-          <Text style={{ color: theme.textMuted }}>Not logged.</Text>
+          <Text style={[typography.body, { color: theme.textMuted }]}>Not logged.</Text>
         )}
-      </View>
+      </Card>
 
-      <View style={[styles.section, { borderColor: theme.border }]}>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Evening</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              router.push({ pathname: '/checkin', params: { session: 'evening', date } });
-            }}
-          >
-            <Text style={{ color: theme.accent, fontWeight: '600' }}>
-              {evening !== undefined ? 'Edit' : 'Log'}
-            </Text>
-          </Pressable>
-        </View>
+      <Card style={styles.section}>
+        <SectionHeader
+          title="Evening"
+          action={evening !== undefined ? 'Edit' : 'Log'}
+          onPress={() => {
+            router.push({ pathname: '/checkin', params: { session: 'evening', date } });
+          }}
+        />
         {evening !== undefined ? (
           <>
             <RatingRow label="Mood" metricKey="mood" value={evening.mood} />
@@ -119,58 +135,47 @@ export default function Entry() {
             <RatingRow label="Appetite" metricKey="appetite" value={evening.appetite} />
             <RatingRow label="Libido" metricKey="libido" value={evening.libido} />
             {evening.sideEffects.length > 0 ? (
-              <View style={styles.row}>
-                <Text style={{ color: theme.textMuted }}>Side effects</Text>
-                <Text style={{ color: theme.text, fontWeight: '600' }}>
-                  {evening.sideEffects.map((effect) => SIDE_EFFECT_LABELS[effect]).join(', ')}
-                </Text>
-              </View>
+              <DetailRow
+                label="Side effects"
+                value={evening.sideEffects.map((effect) => SIDE_EFFECT_LABELS[effect]).join(', ')}
+              />
             ) : null}
             {evening.notes !== undefined ? (
               <View style={styles.notes}>
-                <Text style={{ color: theme.textMuted }}>{evening.notes}</Text>
+                <Text style={[typography.body, { color: theme.textMuted }]}>{evening.notes}</Text>
               </View>
             ) : null}
           </>
         ) : (
-          <Text style={{ color: theme.textMuted }}>Not logged.</Text>
+          <Text style={[typography.body, { color: theme.textMuted }]}>Not logged.</Text>
         )}
-      </View>
+      </Card>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   content: {
-    padding: 20,
+    padding: space.xl,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 20,
+    marginBottom: space.xl,
   },
   section: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    marginBottom: space.lg,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    marginBottom: space.md,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: space.sm,
   },
   notes: {
-    marginTop: 8,
+    marginTop: space.sm,
   },
 });

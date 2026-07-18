@@ -1,46 +1,125 @@
 import { useColorScheme } from 'react-native';
+import type { TextStyle, ViewStyle } from 'react-native';
+import { fontSize, fontWeight, letterSpacing, palette, shadowPrimitive } from './tokens';
 import type { Rating, ScaleDirection } from './types';
 
+/**
+ * Layer 2 — semantic tokens. Every value references a Layer-1 primitive from
+ * `./tokens`; nothing here is a raw literal. `useTheme()` resolves these per
+ * color scheme. Components consume only this layer (plus `typography`,
+ * `shadows`, `space`, `radius`) — never `palette` directly.
+ */
 export interface Theme {
   readonly background: string;
   readonly surface: string;
+  /** Sunken/tinted fill for inputs, unselected chips, grouped rows. */
+  readonly surfaceMuted: string;
   readonly text: string;
   readonly textMuted: string;
   readonly border: string;
   readonly accent: string;
+  /** Tinted-accent fill for selected chips/toggles (softer than a full accent fill). */
+  readonly accentSoft: string;
+  /** Text/icon color that sits on a strong `accent` fill. */
+  readonly onAccent: string;
+  /** Raised knob for switches — light in both modes so it reads on any track. */
+  readonly controlKnob: string;
   readonly good: string;
   readonly bad: string;
   readonly neutral: string;
 }
 
 const light: Theme = {
-  background: '#F7F7F5',
-  surface: '#FFFFFF',
-  text: '#1C1B1A',
-  textMuted: '#6B6862',
-  border: '#E4E1DC',
-  accent: '#3E6259',
-  good: '#3E8E5B',
-  bad: '#C1502E',
-  neutral: '#8A6D3B',
+  background: palette.warm100,
+  surface: palette.warm50,
+  surfaceMuted: palette.warm200,
+  text: palette.warm900,
+  textMuted: palette.warm500,
+  border: palette.warm300,
+  accent: palette.pineStrong,
+  accentSoft: palette.pineSoftLight,
+  onAccent: palette.onLight,
+  controlKnob: palette.warm50,
+  good: palette.greenStrong,
+  bad: palette.clayStrong,
+  neutral: palette.ochreStrong,
 };
 
 const dark: Theme = {
-  background: '#15140F',
-  surface: '#1F1E19',
-  text: '#F2F0EB',
-  textMuted: '#A8A399',
-  border: '#33322B',
-  accent: '#7FB6A6',
-  good: '#6FBF8B',
-  bad: '#E08160',
-  neutral: '#D6B168',
+  background: palette.bark900,
+  surface: palette.bark800,
+  surfaceMuted: palette.bark700,
+  text: palette.barkText,
+  textMuted: palette.barkMuted,
+  border: palette.bark600,
+  accent: palette.pineLight,
+  accentSoft: palette.pineSoftDark,
+  onAccent: palette.onDark,
+  controlKnob: palette.barkText,
+  good: palette.greenLight,
+  bad: palette.clayLight,
+  neutral: palette.ochreLight,
 };
 
 export function useTheme(): Theme {
   const scheme = useColorScheme();
   return scheme === 'dark' ? dark : light;
 }
+
+/** Named text-style roles — the only type styling components apply. */
+export const typography = {
+  display: {
+    fontSize: fontSize.display,
+    fontWeight: fontWeight.heavy,
+    letterSpacing: letterSpacing.tight,
+  },
+  title: {
+    fontSize: fontSize.xxl,
+    fontWeight: fontWeight.bold,
+    letterSpacing: letterSpacing.snug,
+  },
+  sectionLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    letterSpacing: letterSpacing.label,
+    textTransform: 'uppercase',
+  },
+  cardTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+    letterSpacing: letterSpacing.snug,
+  },
+  body: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+  },
+  bodyStrong: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+  },
+  caption: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+  },
+  button: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    letterSpacing: letterSpacing.wide,
+  },
+} satisfies Record<string, TextStyle>;
+
+/** Resolved soft elevation. Light cards use this; dark cards lean on a border. */
+export const shadows = {
+  card: {
+    shadowColor: shadowPrimitive.color,
+    shadowOpacity: shadowPrimitive.opacity,
+    shadowRadius: shadowPrimitive.radius,
+    shadowOffset: { width: 0, height: shadowPrimitive.offsetY },
+    elevation: shadowPrimitive.elevation,
+  },
+} satisfies Record<string, ViewStyle>;
+
+export { space, radius } from './tokens';
 
 /** Color for one day's rating bar: green toward the metric's good end, red away from it. */
 export function ratingColor(theme: Theme, rating: Rating, direction: ScaleDirection): string {

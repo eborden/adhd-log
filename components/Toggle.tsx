@@ -1,5 +1,5 @@
 import { StyleSheet, Switch, Text, View } from 'react-native';
-import { useTheme } from '../lib/theme';
+import { space, typography, useTheme } from '../lib/theme';
 
 export interface ToggleProps {
   readonly label: string;
@@ -12,8 +12,14 @@ export function Toggle({ label, value, onChange }: ToggleProps) {
 
   return (
     <View style={styles.row}>
-      <Text style={[styles.label, { color: theme.text }]}>{label}</Text>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: theme.accent }} />
+      <Text style={[typography.bodyStrong, styles.label, { color: theme.text }]}>{label}</Text>
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ false: theme.surfaceMuted, true: theme.accent }}
+        thumbColor={theme.controlKnob}
+        ios_backgroundColor={theme.surfaceMuted}
+      />
     </View>
   );
 }
@@ -23,12 +29,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: space.xl,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '600',
     flex: 1,
-    marginRight: 12,
+    marginRight: space.md,
   },
 });

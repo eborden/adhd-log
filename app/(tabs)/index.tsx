@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
+import { Card } from '../../components/Card';
 import { computeStreak, loadEntries, todayIsoDate } from '../../lib/storage';
-import { useTheme } from '../../lib/theme';
+import { radius, space, typography, useTheme } from '../../lib/theme';
 import type { DayEntry } from '../../lib/types';
 
 export default function Today() {
@@ -27,15 +29,16 @@ export default function Today() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Text style={[styles.streak, { color: theme.text }]}>
-        {streak > 0 ? `${String(streak)} day streak` : 'Start your streak today'}
+      <Text style={[typography.display, styles.streak, { color: theme.text }]}>
+        {streak > 0 ? `${String(streak)}-day streak` : 'Start your streak'}
       </Text>
-      <Text style={[styles.subtitle, { color: theme.textMuted }]}>
+      <Text style={[typography.caption, styles.subtitle, { color: theme.textMuted }]}>
         Private, on this device. Log this and discuss trends with your provider.
       </Text>
 
       <SessionCard
         title="Morning check-in"
+        icon="sunny-outline"
         done={morningDone}
         onPress={() => {
           router.push({ pathname: '/checkin', params: { session: 'morning' } });
@@ -43,6 +46,7 @@ export default function Today() {
       />
       <SessionCard
         title="Evening check-in"
+        icon="moon-outline"
         done={eveningDone}
         onPress={() => {
           router.push({ pathname: '/checkin', params: { session: 'evening' } });
@@ -54,24 +58,39 @@ export default function Today() {
 
 function SessionCard({
   title,
+  icon,
   done,
   onPress,
 }: {
   readonly title: string;
+  readonly icon: keyof typeof Ionicons.glyphMap;
   readonly done: boolean;
   readonly onPress: () => void;
 }) {
   const theme = useTheme();
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
-    >
-      <Text style={[styles.cardTitle, { color: theme.text }]}>{title}</Text>
-      <Text style={{ color: done ? theme.good : theme.textMuted }}>
-        {done ? 'Done — tap to edit' : 'Not logged yet'}
-      </Text>
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.cardPress}>
+      <Card style={styles.cardRow}>
+        <View style={[styles.iconWrap, { backgroundColor: theme.surfaceMuted }]}>
+          <Ionicons name={icon} size={22} color={theme.accent} />
+        </View>
+        <View style={styles.cardText}>
+          <Text style={[typography.cardTitle, { color: theme.text }]}>{title}</Text>
+          <Text style={[typography.caption, { color: theme.textMuted }]}>
+            {done ? 'Tap to edit' : 'Tap to log'}
+          </Text>
+        </View>
+        <View
+          style={[
+            styles.statusPill,
+            { backgroundColor: done ? theme.accentSoft : theme.surfaceMuted },
+          ]}
+        >
+          <Text style={[typography.caption, { color: done ? theme.accent : theme.text }]}>
+            {done ? 'Done' : 'To do'}
+          </Text>
+        </View>
+      </Card>
     </Pressable>
   );
 }
@@ -79,27 +98,37 @@ function SessionCard({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+    padding: space.xl,
   },
   streak: {
-    fontSize: 26,
-    fontWeight: '700',
-    marginTop: 12,
+    marginTop: space.md,
   },
   subtitle: {
-    fontSize: 13,
-    marginTop: 6,
-    marginBottom: 24,
+    marginTop: space.sm,
+    marginBottom: space.xxl,
   },
-  card: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 18,
-    marginBottom: 14,
+  cardPress: {
+    marginBottom: space.md,
   },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    marginBottom: 6,
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+  },
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardText: {
+    flex: 1,
+    gap: space.xs,
+  },
+  statusPill: {
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs,
+    borderRadius: radius.pill,
   },
 });

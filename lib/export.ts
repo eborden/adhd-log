@@ -2,6 +2,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Directory, File, Paths } from 'expo-file-system';
 import { EVENING_METRICS, MORNING_METRICS, SIDE_EFFECT_LABELS } from './schema';
+import { palette } from './tokens';
 import {
   isDoseChangeList,
   isEntries,
@@ -179,11 +180,12 @@ export function buildReportHtml(
   return `<html>
     <head><meta charset="utf-8" />
     <style>
-      body { font-family: -apple-system, sans-serif; padding: 24px; color: #1c1b1a; }
+      body { font-family: -apple-system, sans-serif; padding: 24px; color: ${palette.warm900}; background: ${palette.warm50}; }
       table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-      th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 13px; }
-      h1, h2 { margin-top: 24px; }
-      p { color: #555; }
+      th, td { border: 1px solid ${palette.warm300}; padding: 6px 10px; text-align: left; font-size: 13px; }
+      h1 { margin-top: 24px; }
+      h2 { margin-top: 24px; color: ${palette.pineStrong}; }
+      p { color: ${palette.warm500}; }
     </style>
     </head>
     <body>

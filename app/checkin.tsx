@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Button } from '../components/Button';
 import { Chips } from '../components/Chips';
 import { ScaleSelector } from '../components/ScaleSelector';
 import { Stepper } from '../components/Stepper';
@@ -16,7 +18,7 @@ import {
   saveCheckin,
   todayIsoDate,
 } from '../lib/storage';
-import { useTheme } from '../lib/theme';
+import { radius, space, typography, useTheme } from '../lib/theme';
 import { assertNever } from '../lib/types';
 import type {
   EveningCheckin,
@@ -219,7 +221,9 @@ export default function Checkin() {
       case 'text':
         return (
           <View key={metric.key} style={styles.textField}>
-            <Text style={[styles.textLabel, { color: theme.text }]}>{metric.label}</Text>
+            <Text style={[typography.bodyStrong, styles.textLabel, { color: theme.text }]}>
+              {metric.label}
+            </Text>
             <TextInput
               value={draft.notes}
               onChangeText={(text) => {
@@ -228,7 +232,11 @@ export default function Checkin() {
               multiline
               placeholder="Optional"
               placeholderTextColor={theme.textMuted}
-              style={[styles.textInput, { color: theme.text, borderColor: theme.border }]}
+              style={[
+                typography.body,
+                styles.textInput,
+                { color: theme.text, backgroundColor: theme.surfaceMuted },
+              ]}
             />
           </View>
         );
@@ -240,16 +248,30 @@ export default function Checkin() {
   return (
     <>
       <Stack.Screen
-        options={{ title: session === 'morning' ? 'Morning check-in' : 'Evening check-in' }}
+        options={{
+          headerTitle: () => (
+            <View style={styles.headerTitle}>
+              <Ionicons
+                name={session === 'morning' ? 'sunny-outline' : 'moon-outline'}
+                size={18}
+                color={theme.accent}
+              />
+              <Text style={[typography.cardTitle, { color: theme.text }]}>
+                {session === 'morning' ? 'Morning check-in' : 'Evening check-in'}
+              </Text>
+            </View>
+          ),
+        }}
       />
       <ScrollView
         style={{ backgroundColor: theme.background }}
         contentContainerStyle={styles.content}
       >
         {metrics.map(renderMetric)}
-        <Pressable
-          accessibilityRole="button"
+        <Button
+          label="Save"
           disabled={!isComplete || saving}
+          style={styles.saveButton}
           onPress={() => {
             setSaving(true);
             handleSave()
@@ -258,47 +280,34 @@ export default function Checkin() {
                 setSaving(false);
               });
           }}
-          style={[
-            styles.saveButton,
-            { backgroundColor: isComplete && !saving ? theme.accent : theme.border },
-          ]}
-        >
-          <Text style={styles.saveButtonText}>Save</Text>
-        </Pressable>
+        />
       </ScrollView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  headerTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
   content: {
-    padding: 20,
+    padding: space.xl,
   },
   textField: {
-    marginBottom: 20,
+    marginBottom: space.xl,
   },
   textLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
+    marginBottom: space.md,
   },
   textInput: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 15,
+    borderRadius: radius.sm,
+    padding: space.md,
     minHeight: 80,
     textAlignVertical: 'top',
   },
   saveButton: {
-    marginTop: 8,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+    marginTop: space.sm,
   },
 });

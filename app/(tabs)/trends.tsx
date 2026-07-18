@@ -10,7 +10,7 @@ import {
   loadEntries,
   todayIsoDate,
 } from '../../lib/storage';
-import { ratingColor, useTheme } from '../../lib/theme';
+import { radius, ratingColor, space, typography, useTheme } from '../../lib/theme';
 import type { DayEntry, IsoDate, Metric, Session } from '../../lib/types';
 
 const RANGE_OPTIONS = [7, 14, 30] as const;
@@ -74,13 +74,12 @@ export default function Trends() {
               }}
               style={[
                 styles.rangeChip,
-                {
-                  backgroundColor: active ? theme.accent : theme.surface,
-                  borderColor: theme.border,
-                },
+                { backgroundColor: active ? theme.accentSoft : theme.surfaceMuted },
               ]}
             >
-              <Text style={{ color: active ? '#FFFFFF' : theme.text }}>{option}d</Text>
+              <Text style={[typography.caption, { color: active ? theme.accent : theme.text }]}>
+                {option}d
+              </Text>
             </Pressable>
           );
         })}
@@ -91,7 +90,9 @@ export default function Trends() {
         const accessor = ratingAccessor(session, metric.key);
         return (
           <View key={`${session}-${metric.key}`} style={styles.metricBlock}>
-            <Text style={[styles.metricLabel, { color: theme.text }]}>{metric.label}</Text>
+            <Text style={[typography.sectionLabel, styles.metricLabel, { color: theme.textMuted }]}>
+              {metric.label}
+            </Text>
             <View style={styles.barsRow}>
               {rows.map((row, index) => {
                 const rating = accessor?.(row);
@@ -131,26 +132,23 @@ export default function Trends() {
 
 const styles = StyleSheet.create({
   content: {
-    padding: 20,
+    padding: space.xl,
   },
   rangeRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 24,
+    gap: space.sm,
+    marginBottom: space.xxl,
   },
   rangeChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    borderRadius: radius.pill,
   },
   metricBlock: {
-    marginBottom: 24,
+    marginBottom: space.xxl,
   },
   metricLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: space.sm,
   },
   barsRow: {
     flexDirection: 'row',
@@ -164,16 +162,16 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: '100%',
-    borderRadius: 2,
+    borderRadius: radius.xs,
   },
   markersRow: {
     flexDirection: 'row',
     gap: 2,
-    marginTop: 4,
+    marginTop: space.xs,
   },
   markerDot: {
     width: 4,
     height: 4,
-    borderRadius: 2,
+    borderRadius: radius.pill,
   },
 });

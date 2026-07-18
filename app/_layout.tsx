@@ -6,10 +6,12 @@ import type { EventSubscription } from 'expo-modules-core';
 import { LockScreen } from '../components/LockScreen';
 import { addNotificationTapListener, configureNotificationHandler } from '../lib/notifications';
 import { loadProfile } from '../lib/storage';
+import { typography, useTheme } from '../lib/theme';
 
 type LockState = 'loading' | 'locked' | 'unlocked';
 
 export default function RootLayout() {
+  const theme = useTheme();
   const [lockState, setLockState] = useState<LockState>('loading');
 
   const evaluateLock = useCallback(async (): Promise<void> => {
@@ -76,7 +78,15 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <Stack>
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: theme.surface },
+          headerShadowVisible: false,
+          headerTintColor: theme.text,
+          headerTitleStyle: typography.cardTitle,
+          contentStyle: { backgroundColor: theme.background },
+        }}
+      >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '../lib/theme';
+import { radius, space, typography, useTheme } from '../lib/theme';
 
 export interface StepperProps {
   readonly label: string;
@@ -18,7 +18,7 @@ export function Stepper({ label, value, min, max, step, onChange }: StepperProps
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: theme.text }]}>{label}</Text>
+      <Text style={[typography.bodyStrong, styles.label, { color: theme.text }]}>{label}</Text>
       <View style={styles.row}>
         <Pressable
           accessibilityRole="button"
@@ -26,20 +26,20 @@ export function Stepper({ label, value, min, max, step, onChange }: StepperProps
           onPress={() => {
             onChange(clamp(current - step));
           }}
-          style={[styles.stepButton, { borderColor: theme.border, backgroundColor: theme.surface }]}
+          style={[styles.stepButton, { backgroundColor: theme.surfaceMuted }]}
         >
-          <Text style={[styles.stepButtonText, { color: theme.text }]}>−</Text>
+          <Text style={[typography.title, { color: theme.text }]}>−</Text>
         </Pressable>
-        <Text style={[styles.value, { color: theme.text }]}>{current}</Text>
+        <Text style={[typography.cardTitle, styles.value, { color: theme.text }]}>{current}</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Increase ${label}`}
           onPress={() => {
             onChange(clamp(current + step));
           }}
-          style={[styles.stepButton, { borderColor: theme.border, backgroundColor: theme.surface }]}
+          style={[styles.stepButton, { backgroundColor: theme.surfaceMuted }]}
         >
-          <Text style={[styles.stepButtonText, { color: theme.text }]}>+</Text>
+          <Text style={[typography.title, { color: theme.text }]}>+</Text>
         </Pressable>
       </View>
     </View>
@@ -48,33 +48,24 @@ export function Stepper({ label, value, min, max, step, onChange }: StepperProps
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
+    marginBottom: space.xl,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
+    marginBottom: space.md,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 20,
+    gap: space.xl,
   },
   stepButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepButtonText: {
-    fontSize: 22,
-    fontWeight: '700',
-  },
   value: {
-    fontSize: 18,
-    fontWeight: '600',
     minWidth: 40,
     textAlign: 'center',
   },
