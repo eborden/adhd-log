@@ -7,6 +7,7 @@ import {
   EVENING_METRICS,
   MORNING_METRICS,
   SIDE_EFFECT_LABELS,
+  SIDE_EFFECT_SEVERITY_LABELS,
   directionForRatingKey,
   enabledEveningMetricKeys,
 } from '../../lib/schema';
@@ -18,6 +19,7 @@ import {
   todayIsoDate,
 } from '../../lib/storage';
 import { ratingColor, space, typography, useTheme } from '../../lib/theme';
+import { SIDE_EFFECTS } from '../../lib/types';
 import type { DayEntry, IsoDate, Metric, Profile, Rating, RatingKey } from '../../lib/types';
 
 /** The scale metrics of a session's schema list, narrowed so `.key` is a `RatingKey`. */
@@ -171,12 +173,32 @@ export default function Entry() {
                 />
               );
             })}
-            {evening.sideEffects.length > 0 ? (
-              <DetailRow
-                label="Side effects"
-                value={evening.sideEffects.map((effect) => SIDE_EFFECT_LABELS[effect]).join(', ')}
-              />
-            ) : null}
+            {(() => {
+              const rows = SIDE_EFFECTS.flatMap((effect) => {
+                const detail = evening.sideEffects[effect];
+                return detail === undefined ? [] : [{ effect, detail }];
+              });
+              if (rows.length === 0) return null;
+              const anyMigrated = rows.some(({ detail }) => detail.origin === 'migrated');
+              return (
+                <>
+                  {rows.map(({ effect, detail }) => (
+                    <DetailRow
+                      key={effect}
+                      label={SIDE_EFFECT_LABELS[effect]}
+                      value={`${SIDE_EFFECT_SEVERITY_LABELS[detail.severity]}${
+                        detail.origin === 'migrated' ? ' *' : ''
+                      }`}
+                    />
+                  ))}
+                  {anyMigrated ? (
+                    <Text style={[typography.caption, styles.footnote, { color: theme.textMuted }]}>
+                      * Severity defaulted when migrating an older entry — not entered by hand.
+                    </Text>
+                  ) : null}
+                </>
+              );
+            })()}
             {evening.notes !== undefined ? (
               <View style={styles.notes}>
                 <Text style={[typography.body, { color: theme.textMuted }]}>{evening.notes}</Text>
@@ -214,5 +236,8 @@ const styles = StyleSheet.create({
   },
   notes: {
     marginTop: space.sm,
+  },
+  footnote: {
+    marginTop: space.xs,
   },
 });

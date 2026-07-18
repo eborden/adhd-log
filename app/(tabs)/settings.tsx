@@ -23,6 +23,7 @@ import {
 } from '../../lib/schema';
 import {
   appendDoseChange,
+  firstOnsetDates,
   isEveningRatingKey,
   isHour,
   lastNDates,
@@ -114,7 +115,7 @@ export default function Settings() {
       const [entries, currentDoses] = await Promise.all([loadEntries(), loadDoseChanges()]);
       const dates = lastNDates(30, todayIsoDate());
       const rows = rowsInRange(entries, dates);
-      const html = buildReportHtml(currentProfile, currentDoses, rows);
+      const html = buildReportHtml(currentProfile, currentDoses, rows, firstOnsetDates(entries));
       await exportPdfReport(html);
     } catch {
       Alert.alert('Could not export the PDF report.');

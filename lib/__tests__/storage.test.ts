@@ -6,7 +6,9 @@ import {
   type CheckinInput,
   clearAllData,
   computeStreak,
+  doseActiveOn,
   doseChangeMarkers,
+  firstOnsetDates,
   formatIsoDate,
   isDayEntry,
   isDoseChangeList,
@@ -19,6 +21,7 @@ import {
   isProfile,
   isRating,
   isSideEffect,
+  isSideEffectSeverity,
   isoTimestampNow,
   lastNDates,
   loadDoseChanges,
@@ -27,6 +30,7 @@ import {
   parseDoseChangeList,
   parseEntries,
   parseEntriesTolerant,
+  parseEveningCheckin,
   parseIsoDate,
   parseProfile,
   restoreBackup,
@@ -216,6 +220,146 @@ describe('isEveningCheckin', () => {
   });
 });
 
+describe('isSideEffectSeverity', () => {
+  it('accepts the three severities and rejects anything else', () => {
+    expect(['mild', 'moderate', 'severe'].every(isSideEffectSeverity)).toBe(true);
+    expect(isSideEffectSeverity('critical')).toBe(false);
+    expect(isSideEffectSeverity(2)).toBe(false);
+  });
+});
+
+describe('parseEveningCheckin (migration + normalization)', () => {
+  const completedAt = '2026-07-17T20:00:00.000Z';
+
+  it('migrates a legacy SideEffect[] to a marked moderate default', () => {
+    const parsed = parseEveningCheckin({ ratings: {}, sideEffects: ['nausea'], completedAt });
+    expect(parsed?.sideEffects).toEqual({
+      nausea: { severity: 'moderate', origin: 'migrated' },
+    });
+  });
+
+  it('dedupes a repeated legacy effect to a single key', () => {
+    const parsed = parseEveningCheckin({
+      ratings: {},
+      sideEffects: ['nausea', 'nausea'],
+      completedAt,
+    });
+    expect(Object.keys(parsed?.sideEffects ?? {})).toEqual(['nausea']);
+  });
+
+  it('accepts the new keyed-record form verbatim, preserving and omitting origin', () => {
+    const parsed = parseEveningCheckin({
+      ratings: { mood: 3 },
+      sideEffects: {
+        nausea: { severity: 'severe' },
+        headache: { severity: 'mild', origin: 'migrated' },
+      },
+      completedAt,
+    });
+    expect(parsed?.sideEffects).toEqual({
+      nausea: { severity: 'severe' },
+      headache: { severity: 'mild', origin: 'migrated' },
+    });
+    expect(parsed?.ratings.mood).toBe(3);
+  });
+
+  it('rejects a detail missing severity, a bad severity, and a non-array/non-record', () => {
+    expect(
+      parseEveningCheckin({ ratings: {}, sideEffects: { nausea: {} }, completedAt }),
+    ).toBeUndefined();
+    expect(
+      parseEveningCheckin({ ratings: {}, sideEffects: { nausea: { severity: 'x' } }, completedAt }),
+    ).toBeUndefined();
+    expect(parseEveningCheckin({ ratings: {}, sideEffects: 'nope', completedAt })).toBeUndefined();
+  });
+
+  it('preserves notes when present and omits it when absent', () => {
+    const withNotes = parseEveningCheckin({
+      ratings: {},
+      sideEffects: {},
+      notes: 'hi',
+      completedAt,
+    });
+    expect(withNotes?.notes).toBe('hi');
+    const withoutNotes = parseEveningCheckin({ ratings: {}, sideEffects: {}, completedAt });
+    expect(withoutNotes !== undefined && 'notes' in withoutNotes).toBe(false);
+  });
+});
+
+describe('loadEntries migrates legacy days on read', () => {
+  it('normalizes a stored legacy SideEffect[] day to the keyed record', async () => {
+    await AsyncStorage.setItem(
+      'entries',
+      JSON.stringify({
+        '2026-07-01': {
+          date: '2026-07-01',
+          evening: {
+            ratings: { mood: 3 },
+            sideEffects: ['nausea', 'headache'],
+            completedAt: '2026-07-01T20:00:00.000Z',
+          },
+        },
+      }),
+    );
+    const entries = await loadEntries();
+    const evening = entries['2026-07-01' as IsoDate]?.evening;
+    expect(evening?.sideEffects).toEqual({
+      nausea: { severity: 'moderate', origin: 'migrated' },
+      headache: { severity: 'moderate', origin: 'migrated' },
+    });
+  });
+});
+
+describe('firstOnsetDates', () => {
+  it('returns the earliest date each effect appears across the full log', () => {
+    const entries: Record<IsoDate, DayEntry> = {
+      ['2026-07-03' as IsoDate]: {
+        date: '2026-07-03' as IsoDate,
+        evening: {
+          ratings: {},
+          sideEffects: { nausea: { severity: 'mild' } },
+          completedAt: '2026-07-03T20:00:00.000Z' as ReturnType<typeof isoTimestampNow>,
+        },
+      },
+      ['2026-07-01' as IsoDate]: {
+        date: '2026-07-01' as IsoDate,
+        evening: {
+          ratings: {},
+          sideEffects: { nausea: { severity: 'moderate' }, headache: { severity: 'mild' } },
+          completedAt: '2026-07-01T20:00:00.000Z' as ReturnType<typeof isoTimestampNow>,
+        },
+      },
+      ['2026-07-02' as IsoDate]: { date: '2026-07-02' as IsoDate },
+    };
+    const onset = firstOnsetDates(entries);
+    expect(onset.get('nausea')).toBe('2026-07-01');
+    expect(onset.get('headache')).toBe('2026-07-01');
+    expect(onset.has('dizziness')).toBe(false);
+  });
+
+  it('is empty for an empty log', () => {
+    expect(firstOnsetDates({}).size).toBe(0);
+  });
+});
+
+describe('doseActiveOn', () => {
+  const doses: readonly DoseChange[] = [
+    { date: '2026-07-01' as IsoDate, dose: { amount: 20, unit: 'mg' } },
+    { date: '2026-07-10' as IsoDate, dose: { amount: 40, unit: 'mg' } },
+  ];
+
+  it('returns the last change on or before the date', () => {
+    expect(doseActiveOn(doses, '2026-07-05' as IsoDate)).toEqual({ amount: 20, unit: 'mg' });
+    expect(doseActiveOn(doses, '2026-07-10' as IsoDate)).toEqual({ amount: 40, unit: 'mg' });
+    expect(doseActiveOn(doses, '2026-07-20' as IsoDate)).toEqual({ amount: 40, unit: 'mg' });
+  });
+
+  it('returns undefined before the first change', () => {
+    expect(doseActiveOn(doses, '2026-06-30' as IsoDate)).toBeUndefined();
+    expect(doseActiveOn([], '2026-07-05' as IsoDate)).toBeUndefined();
+  });
+});
+
 describe('isDoseChangeList', () => {
   it('accepts a well-formed list', () => {
     expect(
@@ -397,7 +541,7 @@ describe('persistence', () => {
           appetite: 3,
           libido: 3,
         },
-        sideEffects: [],
+        sideEffects: {},
         completedAt: isoTimestampNow(),
       },
     });
@@ -462,7 +606,7 @@ describe('persistence', () => {
     const entries: Readonly<Record<IsoDate, DayEntry>> = {
       ['2026-07-02' as IsoDate]: {
         date: '2026-07-02' as IsoDate,
-        evening: { ratings: { mood: 3 }, sideEffects: [], completedAt: isoTimestampNow() },
+        evening: { ratings: { mood: 3 }, sideEffects: {}, completedAt: isoTimestampNow() },
       },
     };
     const backup = buildBackup(profile, doses, entries);

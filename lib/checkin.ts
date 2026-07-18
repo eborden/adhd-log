@@ -6,7 +6,7 @@ import {
   type MorningCheckin,
   type Rating,
   type RatingKey,
-  type SideEffect,
+  type SideEffectReports,
 } from './types';
 
 /**
@@ -18,7 +18,7 @@ export interface Draft {
   readonly doseTaken: boolean;
   readonly ratings: Readonly<Partial<Record<RatingKey, Rating>>>;
   readonly sleepHours: number | undefined;
-  readonly sideEffects: readonly SideEffect[];
+  readonly sideEffects: SideEffectReports;
   readonly notes: string;
 }
 
@@ -33,7 +33,7 @@ export const EMPTY_DRAFT: Draft = {
   doseTaken: true,
   ratings: {},
   sleepHours: DEFAULT_SLEEP_HOURS,
-  sideEffects: [],
+  sideEffects: {},
   notes: '',
 };
 
@@ -58,7 +58,7 @@ export function draftFromMorning(checkin: MorningCheckin): Draft {
     doseTaken: checkin.doseTaken,
     ratings: { ...checkin.ratings },
     sleepHours: checkin.sleepHours ?? DEFAULT_SLEEP_HOURS,
-    sideEffects: [],
+    sideEffects: {},
     notes: '',
   };
 }

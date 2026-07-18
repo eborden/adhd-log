@@ -1,11 +1,15 @@
 import {
   SIDE_EFFECTS,
+  assertNever,
   type EveningRatingKey,
   type Metric,
   type Profile,
   type RatingKey,
   type ScaleDirection,
   type SideEffect,
+  type SideEffectDetail,
+  type SideEffectReports,
+  type SideEffectSeverity,
 } from './types';
 
 /**
@@ -105,6 +109,57 @@ export const SIDE_EFFECT_LABELS: Readonly<Record<SideEffect, string>> = {
   racingHeart: 'Racing heart',
   other: 'Other',
 };
+
+export const SIDE_EFFECT_SEVERITY_LABELS: Readonly<Record<SideEffectSeverity, string>> = {
+  mild: 'Mild',
+  moderate: 'Moderate',
+  severe: 'Severe',
+};
+
+/** Bound to the secondary severity control only, never the chip body. Exhaustive → assertNever. */
+export function cycleSeverity(current: SideEffectSeverity): SideEffectSeverity {
+  switch (current) {
+    case 'mild':
+      return 'moderate';
+    case 'moderate':
+      return 'severe';
+    case 'severe':
+      return 'mild';
+    default:
+      return assertNever(current);
+  }
+}
+
+export function isSideEffectSelected(reports: SideEffectReports, effect: SideEffect): boolean {
+  return reports[effect] !== undefined;
+}
+
+/** Toggle select/deselect. New selections start at 'mild' (freshly-captured, least-assuming). */
+export function withSideEffectToggled(
+  reports: SideEffectReports,
+  effect: SideEffect,
+): SideEffectReports {
+  if (reports[effect] === undefined) {
+    return { ...reports, [effect]: { severity: 'mild' } };
+  }
+  const next: Partial<Record<SideEffect, SideEffectDetail>> = {};
+  for (const key of SIDE_EFFECTS) {
+    if (key === effect) continue;
+    const detail = reports[key];
+    if (detail !== undefined) next[key] = detail; // rebuild without the removed key (no dynamic delete)
+  }
+  return next;
+}
+
+/** Set severity for an already-selected effect. No-op if not selected. */
+export function withSideEffectSeverity(
+  reports: SideEffectReports,
+  effect: SideEffect,
+  severity: SideEffectSeverity,
+): SideEffectReports {
+  if (reports[effect] === undefined) return reports;
+  return { ...reports, [effect]: { severity } }; // omits `origin`: now user-entered, not migrated
+}
 
 /** Evening ratings active out of the box — the rest stay toggleable in Settings. */
 export const DEFAULT_ENABLED_EVENING_METRICS: readonly EveningRatingKey[] = [

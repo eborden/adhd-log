@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { HOURS, MINUTES, SIDE_EFFECTS, assertNever } from '../types';
+import { HOURS, MINUTES, SIDE_EFFECTS, SIDE_EFFECT_SEVERITIES, assertNever } from '../types';
+import type { SideEffectSeverity } from '../types';
 
 describe('HOURS', () => {
   it('covers every hour of the day exactly once', () => {
@@ -22,6 +23,15 @@ describe('SIDE_EFFECTS', () => {
     expect(SIDE_EFFECTS).toHaveLength(9);
     expect(SIDE_EFFECTS).toContain('nausea');
     expect(SIDE_EFFECTS).toContain('other');
+  });
+});
+
+describe('SIDE_EFFECT_SEVERITIES', () => {
+  it('covers the severity union in ascending order', () => {
+    expect(SIDE_EFFECT_SEVERITIES).toEqual(['mild', 'moderate', 'severe']);
+    // Compile-time exhaustiveness: every literal is assignable to the union and back.
+    const all: readonly SideEffectSeverity[] = SIDE_EFFECT_SEVERITIES;
+    expect(all).toHaveLength(3);
   });
 });
 

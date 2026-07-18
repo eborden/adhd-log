@@ -4,11 +4,16 @@ import {
   EVENING_METRICS,
   MORNING_METRICS,
   SIDE_EFFECT_LABELS,
+  SIDE_EFFECT_SEVERITY_LABELS,
+  cycleSeverity,
   directionForRatingKey,
   enabledEveningMetricKeys,
+  isSideEffectSelected,
   withEveningMetricToggled,
+  withSideEffectSeverity,
+  withSideEffectToggled,
 } from '../schema';
-import { EVENING_RATING_KEYS, SIDE_EFFECTS } from '../types';
+import { EVENING_RATING_KEYS, SIDE_EFFECTS, SIDE_EFFECT_SEVERITIES } from '../types';
 import type { Profile } from '../types';
 
 describe('MORNING_METRICS', () => {
@@ -55,6 +60,58 @@ describe('SIDE_EFFECT_LABELS', () => {
     for (const effect of SIDE_EFFECTS) {
       expect(SIDE_EFFECT_LABELS[effect]).toBeTruthy();
     }
+  });
+});
+
+describe('SIDE_EFFECT_SEVERITY_LABELS', () => {
+  it('has a label for every severity', () => {
+    for (const severity of SIDE_EFFECT_SEVERITIES) {
+      expect(SIDE_EFFECT_SEVERITY_LABELS[severity]).toBeTruthy();
+    }
+  });
+});
+
+describe('cycleSeverity', () => {
+  it('cycles mild -> moderate -> severe -> mild', () => {
+    expect(cycleSeverity('mild')).toBe('moderate');
+    expect(cycleSeverity('moderate')).toBe('severe');
+    expect(cycleSeverity('severe')).toBe('mild');
+  });
+});
+
+describe('withSideEffectToggled / isSideEffectSelected', () => {
+  it('adds a new selection at mild severity', () => {
+    const next = withSideEffectToggled({}, 'nausea');
+    expect(next).toEqual({ nausea: { severity: 'mild' } });
+    expect(isSideEffectSelected(next, 'nausea')).toBe(true);
+    expect(isSideEffectSelected(next, 'headache')).toBe(false);
+  });
+
+  it('removes an existing selection, rebuilding without the key', () => {
+    const start = {
+      nausea: { severity: 'moderate' as const },
+      headache: { severity: 'mild' as const },
+    };
+    const next = withSideEffectToggled(start, 'nausea');
+    expect(next).toEqual({ headache: { severity: 'mild' } });
+    expect('nausea' in next).toBe(false);
+  });
+});
+
+describe('withSideEffectSeverity', () => {
+  it('updates only the matching effect and drops the origin marker', () => {
+    const start = {
+      nausea: { severity: 'moderate' as const, origin: 'migrated' as const },
+      headache: { severity: 'mild' as const },
+    };
+    const next = withSideEffectSeverity(start, 'nausea', 'severe');
+    expect(next.nausea).toEqual({ severity: 'severe' });
+    expect(next.headache).toEqual({ severity: 'mild' });
+  });
+
+  it('is a no-op on an unselected effect', () => {
+    const start = { nausea: { severity: 'mild' as const } };
+    expect(withSideEffectSeverity(start, 'headache', 'severe')).toBe(start);
   });
 });
 

@@ -44,6 +44,25 @@ export const SIDE_EFFECTS = [
 ] as const;
 export type SideEffect = (typeof SIDE_EFFECTS)[number];
 
+export const SIDE_EFFECT_SEVERITIES = ['mild', 'moderate', 'severe'] as const;
+export type SideEffectSeverity = (typeof SIDE_EFFECT_SEVERITIES)[number];
+
+export interface SideEffectDetail {
+  readonly severity: SideEffectSeverity;
+  /**
+   * Present only on a severity synthesized by migrate-on-read (never user-typed).
+   * Dropped the moment the user edits that effect's severity. Threaded into the
+   * report so a migrated default can be footnoted, never shown as real input.
+   */
+  readonly origin?: 'migrated';
+}
+
+/**
+ * Side effects for an evening, keyed by effect so at most one detail exists per effect —
+ * duplicate-effect states are structurally unrepresentable (object keys are unique).
+ */
+export type SideEffectReports = Readonly<Partial<Record<SideEffect, SideEffectDetail>>>;
+
 export const MORNING_RATING_KEYS = ['sleepQuality', 'wakingMood'] as const;
 export type MorningRatingKey = (typeof MORNING_RATING_KEYS)[number];
 
@@ -94,7 +113,7 @@ export interface MorningCheckin {
 
 export interface EveningCheckin {
   readonly ratings: Partial<Record<EveningRatingKey, Rating>>;
-  readonly sideEffects: readonly SideEffect[];
+  readonly sideEffects: SideEffectReports;
   readonly notes?: string;
   readonly completedAt: IsoTimestamp;
 }

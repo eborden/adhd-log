@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { __setMockFileExists, __setMockPickedText } from '../__mocks__/expo-file-system';
 import {
+  adherenceInRange,
   averageOf,
   buildBackup,
   buildReportHtml,
@@ -10,9 +11,13 @@ import {
   parseBackup,
   ratingAccessor,
   rowsInRange,
+  severityRunLength,
+  sideEffectSummary,
 } from '../export';
 import { isoTimestampNow } from '../storage';
-import type { DayEntry, DoseChange, IsoDate, Profile, Rating } from '../types';
+import type { DayEntry, DoseChange, IsoDate, Profile, Rating, SideEffect } from '../types';
+
+const NO_ONSET = new Map<SideEffect, IsoDate>();
 
 const DAY_1 = '2026-07-01' as IsoDate;
 const DAY_2 = '2026-07-02' as IsoDate;
@@ -60,7 +65,7 @@ describe('ratingAccessor', () => {
   it('reads evening ratings from the evening session', () => {
     const row: DayEntry = {
       date: DAY_1,
-      evening: { ratings: { mood: 4 }, sideEffects: [], completedAt: isoTimestampNow() },
+      evening: { ratings: { mood: 4 }, sideEffects: {}, completedAt: isoTimestampNow() },
     };
     expect(ratingAccessor('evening', 'mood')(row)).toBe(4);
   });
@@ -90,7 +95,7 @@ describe('buildReportHtml', () => {
     const doses: readonly DoseChange[] = [
       { date: DAY_1, dose: { amount: 40, unit: 'mg' }, note: 'titrating up' },
     ];
-    const html = buildReportHtml(profile, doses, rows);
+    const html = buildReportHtml(profile, doses, rows, NO_ONSET);
 
     expect(html).toContain('Atomoxetine');
     expect(html).toContain('Morning averages');
@@ -101,7 +106,7 @@ describe('buildReportHtml', () => {
     expect(html).toContain('titrating up');
   });
 
-  it('lists side effects for a day that logged any', () => {
+  it('lists side effects with severity for a day that logged any', () => {
     const rowWithSideEffects: DayEntry = {
       date: DAY_1,
       evening: {
@@ -114,12 +119,15 @@ describe('buildReportHtml', () => {
           appetite: 3,
           libido: 3,
         },
-        sideEffects: ['nausea', 'headache'],
+        sideEffects: {
+          nausea: { severity: 'severe' },
+          headache: { severity: 'mild' },
+        },
         completedAt: isoTimestampNow(),
       },
     };
-    const html = buildReportHtml(null, [], [rowWithSideEffects]);
-    expect(html).toContain('Nausea, Headache');
+    const html = buildReportHtml(null, [], [rowWithSideEffects], NO_ONSET);
+    expect(html).toContain('Nausea (Severe), Headache (Mild)');
   });
 
   it('reports partial averages for a metric some days omitted, and omits a metric with no data in range at all', () => {
@@ -127,7 +135,7 @@ describe('buildReportHtml', () => {
       date: DAY_1,
       evening: {
         ratings: { mood: 5, focus: 5 },
-        sideEffects: [],
+        sideEffects: {},
         completedAt: isoTimestampNow(),
       },
     };
@@ -135,11 +143,11 @@ describe('buildReportHtml', () => {
       date: DAY_2,
       evening: {
         ratings: { mood: 3, focus: 3, libido: 4 },
-        sideEffects: [],
+        sideEffects: {},
         completedAt: isoTimestampNow(),
       },
     };
-    const html = buildReportHtml(null, [], [rowMoodFocusOnly, rowWithLibido]);
+    const html = buildReportHtml(null, [], [rowMoodFocusOnly, rowWithLibido], NO_ONSET);
 
     // mood/focus answered both days: (5+3)/2 = 4.0
     expect(html).toContain('<td>Overall mood today</td><td>4.0</td>');
@@ -160,9 +168,119 @@ describe('buildReportHtml', () => {
       lockEnabled: false,
       createdAt: isoTimestampNow(),
     };
-    const html = buildReportHtml(profile, [], [{ date: DAY_1 }]);
+    const html = buildReportHtml(profile, [], [{ date: DAY_1 }], NO_ONSET);
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('renders the side-effects section with adherence caption, onset, run-length, and migrated footnote', () => {
+    const rows: readonly DayEntry[] = [
+      {
+        date: DAY_1,
+        morning: { ratings: {}, doseTaken: true, completedAt: isoTimestampNow() },
+        evening: {
+          ratings: {},
+          sideEffects: { nausea: { severity: 'moderate', origin: 'migrated' } },
+          completedAt: isoTimestampNow(),
+        },
+      },
+      {
+        date: DAY_2,
+        morning: { ratings: {}, doseTaken: false, completedAt: isoTimestampNow() },
+        evening: {
+          ratings: {},
+          sideEffects: { nausea: { severity: 'severe' } },
+          completedAt: isoTimestampNow(),
+        },
+      },
+    ];
+    const onset = new Map<SideEffect, IsoDate>([['nausea', DAY_1]]);
+    const doses: readonly DoseChange[] = [{ date: DAY_1, dose: { amount: 40, unit: 'mg' } }];
+    const html = buildReportHtml(null, doses, rows, onset);
+
+    expect(html).toContain('<h2>Side effects</h2>');
+    expect(html).toContain('Dose taken on 1 of 2 logged mornings in this range.');
+    expect(html).toContain('Nausea');
+    expect(html).toContain('Moderate×1, Severe×1');
+    expect(html).toContain('40mg');
+    // hasMigratedDays → asterisk + footnote
+    expect(html).toContain('Nausea *');
+    expect(html).toContain('defaulted when migrating');
+  });
+});
+
+describe('severityRunLength', () => {
+  it('collapses consecutive runs into labeled counts', () => {
+    expect(severityRunLength(['mild', 'mild', 'mild', 'moderate', 'moderate'])).toBe(
+      'Mild×3, Moderate×2',
+    );
+  });
+
+  it('is empty for no severities', () => {
+    expect(severityRunLength([])).toBe('');
+  });
+});
+
+describe('adherenceInRange', () => {
+  it('counts doses taken over logged mornings, ignoring evening-only days', () => {
+    const rows: readonly DayEntry[] = [
+      morningRow(DAY_1, 3), // doseTaken true
+      { date: DAY_2 }, // no morning
+      {
+        date: DAY_3,
+        morning: { ratings: {}, doseTaken: false, completedAt: isoTimestampNow() },
+      },
+    ];
+    expect(adherenceInRange(rows)).toEqual({ dosesTaken: 1, loggedMornings: 2 });
+  });
+});
+
+describe('sideEffectSummary', () => {
+  const rows: readonly DayEntry[] = [
+    {
+      date: DAY_1,
+      evening: {
+        ratings: {},
+        sideEffects: { nausea: { severity: 'mild', origin: 'migrated' } },
+        completedAt: isoTimestampNow(),
+      },
+    },
+    { date: DAY_2 },
+    {
+      date: DAY_3,
+      evening: {
+        ratings: {},
+        sideEffects: { nausea: { severity: 'moderate' } },
+        completedAt: isoTimestampNow(),
+      },
+    },
+  ];
+
+  it('summarizes onset, range span, ongoing status, days, run-length, and migration flag', () => {
+    const onset = new Map<SideEffect, IsoDate>([['nausea', '2026-06-20' as IsoDate]]);
+    const doses: readonly DoseChange[] = [
+      { date: '2026-06-01' as IsoDate, dose: { amount: 20, unit: 'mg' } },
+    ];
+    const summary = sideEffectSummary(rows, onset, doses);
+    expect(summary).toHaveLength(1);
+    const [nausea] = summary;
+    expect(nausea?.onsetDate).toBe('2026-06-20');
+    expect(nausea?.onsetDose).toEqual({ amount: 20, unit: 'mg' });
+    expect(nausea?.onsetBeforeRange).toBe(true);
+    expect(nausea?.firstInRange).toBe(DAY_1);
+    expect(nausea?.lastInRange).toBe(DAY_3);
+    expect(nausea?.ongoingAtRangeEnd).toBe(true);
+    expect(nausea?.daysReported).toBe(2);
+    expect(nausea?.loggedEveningsInRange).toBe(2);
+    expect(nausea?.severityRun).toBe('Mild×1, Moderate×1');
+    expect(nausea?.latestSeverity).toBe('moderate');
+    expect(nausea?.hasMigratedDays).toBe(true);
+  });
+
+  it('falls back to firstInRange when the onset map has no entry', () => {
+    const summary = sideEffectSummary(rows, NO_ONSET, []);
+    expect(summary[0]?.onsetDate).toBe(DAY_1);
+    expect(summary[0]?.onsetBeforeRange).toBe(false);
   });
 });
 
@@ -212,6 +330,31 @@ describe('buildBackup / parseBackup', () => {
       entries: { 'not-a-date': {} },
     });
     expect(result.ok).toBe(false);
+  });
+
+  it('normalizes a legacy-entries backup and preserves migrated provenance', () => {
+    const result = parseBackup({
+      exportedAt: isoTimestampNow(),
+      profile: null,
+      doses: [],
+      entries: {
+        [DAY_1]: {
+          date: DAY_1,
+          evening: {
+            ratings: { mood: 3 },
+            sideEffects: ['nausea'],
+            completedAt: isoTimestampNow(),
+          },
+        },
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const evening = result.value.entries[DAY_1]?.evening;
+      expect(evening?.sideEffects).toEqual({
+        nausea: { severity: 'moderate', origin: 'migrated' },
+      });
+    }
   });
 });
 

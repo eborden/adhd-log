@@ -24,6 +24,9 @@ import {
   type Rating,
   type RatingKey,
   type SideEffect,
+  type SideEffectDetail,
+  type SideEffectReports,
+  type SideEffectSeverity,
   type TimeOfDay,
 } from './types';
 
@@ -139,26 +142,111 @@ export function isMorningCheckin(value: unknown): value is MorningCheckin {
   return sleepHours === undefined || typeof sleepHours === 'number';
 }
 
-export function isEveningCheckin(value: unknown): value is EveningCheckin {
+export function isSideEffectSeverity(value: unknown): value is SideEffectSeverity {
+  return value === 'mild' || value === 'moderate' || value === 'severe';
+}
+
+function isSideEffectDetail(value: unknown): value is SideEffectDetail {
   if (!isRecord(value)) return false;
-  if (!isRatingsRecord(value['ratings'], EVENING_RATING_KEYS)) return false;
-  const sideEffects = value['sideEffects'];
-  if (!isUnknownArray(sideEffects) || !sideEffects.every(isSideEffect)) return false;
-  if (!isIsoTimestamp(value['completedAt'])) return false;
+  if (!isSideEffectSeverity(value['severity'])) return false;
+  const origin = value['origin'];
+  return origin === undefined || origin === 'migrated';
+}
+
+/** Legacy chips stored a bare SideEffect[]; migrate-on-read to a labeled, marked default. */
+const LEGACY_SIDE_EFFECT_SEVERITY: SideEffectSeverity = 'moderate';
+
+/** Accepts legacy SideEffect[] AND the new keyed record; always returns the new shape. */
+function parseSideEffectReports(value: unknown): SideEffectReports | undefined {
+  const out: Partial<Record<SideEffect, SideEffectDetail>> = {};
+  if (isUnknownArray(value)) {
+    for (const item of value) {
+      if (!isSideEffect(item)) return undefined; // reject genuinely malformed items
+      if (out[item] !== undefined) continue; // dedupe any legacy repeats, first wins
+      out[item] = { severity: LEGACY_SIDE_EFFECT_SEVERITY, origin: 'migrated' };
+    }
+    return out;
+  }
+  if (isRecord(value)) {
+    for (const [key, detail] of Object.entries(value)) {
+      if (!isSideEffect(key)) return undefined;
+      if (!isSideEffectDetail(detail)) return undefined;
+      out[key] = detail; // object keys are unique → duplicate-effect impossible
+    }
+    return out;
+  }
+  return undefined;
+}
+
+/**
+ * Validates AND normalizes — the returned object is always the new keyed-record shape, even
+ * for a legacy `sideEffects: string[]` value.
+ */
+export function parseEveningCheckin(value: unknown): EveningCheckin | undefined {
+  if (!isRecord(value)) return undefined;
+  const ratingsRaw = value['ratings'];
+  if (!isRecord(ratingsRaw)) return undefined;
+  const ratings: Partial<Record<EveningRatingKey, Rating>> = {};
+  for (const key of EVENING_RATING_KEYS) {
+    const rating = ratingsRaw[key];
+    if (rating === undefined) continue;
+    if (!isRating(rating)) return undefined;
+    ratings[key] = rating;
+  }
+  const sideEffects = parseSideEffectReports(value['sideEffects']);
+  if (sideEffects === undefined) return undefined;
+  const completedAt = value['completedAt'];
+  if (!isIsoTimestamp(completedAt)) return undefined;
   const notes = value['notes'];
-  return notes === undefined || typeof notes === 'string';
+  if (!(notes === undefined || typeof notes === 'string')) return undefined;
+  return {
+    ratings,
+    sideEffects,
+    completedAt,
+    ...(notes !== undefined ? { notes } : {}),
+  };
 }
 
-export function isDayEntry(value: unknown): value is DayEntry {
-  if (!isRecord(value) || !isIsoDate(value['date'])) return false;
-  const morning = value['morning'];
-  if (morning !== undefined && !isMorningCheckin(morning)) return false;
-  const evening = value['evening'];
-  if (evening !== undefined && !isEveningCheckin(evening)) return false;
-  return true;
+/**
+ * Validity check ONLY. A `true` result does NOT mean `value` already has the new shape
+ * (legacy string[] side effects also validate). Never narrow-and-return the raw value; only
+ * `parseEveningCheckin` mints an `EveningCheckin`. Returns boolean by design — a
+ * `value is EveningCheckin` predicate would be a lie for legacy input.
+ */
+export function isEveningCheckin(value: unknown): boolean {
+  return parseEveningCheckin(value) !== undefined;
 }
 
-export function isEntries(value: unknown): value is Readonly<Record<IsoDate, DayEntry>> {
+/** Validates AND normalizes a day entry — the sole minter of `DayEntry` alongside the callers below. */
+export function parseDayEntry(value: unknown): DayEntry | undefined {
+  if (!isRecord(value) || !isIsoDate(value['date'])) return undefined;
+  const date = value['date'];
+  const morningRaw = value['morning'];
+  let morning: MorningCheckin | undefined;
+  if (morningRaw !== undefined) {
+    if (!isMorningCheckin(morningRaw)) return undefined;
+    morning = morningRaw; // isMorningCheckin is a genuine, passthrough-safe predicate
+  }
+  const eveningRaw = value['evening'];
+  let evening: EveningCheckin | undefined;
+  if (eveningRaw !== undefined) {
+    evening = parseEveningCheckin(eveningRaw);
+    if (evening === undefined) return undefined;
+  }
+  return {
+    date,
+    ...(morning !== undefined ? { morning } : {}),
+    ...(evening !== undefined ? { evening } : {}),
+  };
+}
+
+/** Validity check ONLY — like `isEveningCheckin`, never the value path. */
+export function isDayEntry(value: unknown): boolean {
+  return parseDayEntry(value) !== undefined;
+}
+
+/** Validity check ONLY — never the value path (that's `parseEntries`/`parseEntriesTolerant`). */
+export function isEntries(value: unknown): boolean {
   if (!isRecord(value)) return false;
   return Object.entries(value).every(([key, entry]) => isIsoDate(key) && isDayEntry(entry));
 }
@@ -177,9 +265,20 @@ export function parseDoseChangeList(raw: unknown): Parsed<readonly DoseChange[]>
   return { ok: false, reason: 'Malformed dose-change JSON' };
 }
 
+/**
+ * All-or-nothing normalizing parse (used by backup import): every day must parse, and each is
+ * returned in the new keyed-record shape. Legacy `sideEffects: string[]` days are migrated.
+ */
 export function parseEntries(raw: unknown): Parsed<Readonly<Record<IsoDate, DayEntry>>> {
-  if (isEntries(raw)) return { ok: true, value: raw };
-  return { ok: false, reason: 'Malformed entries JSON' };
+  if (!isRecord(raw)) return { ok: false, reason: 'Malformed entries JSON' };
+  const out: Record<IsoDate, DayEntry> = {};
+  for (const [key, entryRaw] of Object.entries(raw)) {
+    if (!isIsoDate(key)) return { ok: false, reason: 'Malformed entries JSON' };
+    const entry = parseDayEntry(entryRaw);
+    if (entry === undefined) return { ok: false, reason: 'Malformed entries JSON' };
+    out[key] = entry;
+  }
+  return { ok: true, value: out };
 }
 
 export interface EntriesParse {
@@ -201,10 +300,45 @@ export function parseEntriesTolerant(raw: unknown): EntriesParse {
   const entries: Record<IsoDate, DayEntry> = {};
   const droppedKeys: string[] = [];
   for (const [key, value] of Object.entries(raw)) {
-    if (isIsoDate(key) && isDayEntry(value)) entries[key] = value;
+    // parseDayEntry both validates and normalizes legacy shapes — the value path never
+    // returns a raw blob, so migrate-on-read applies to every load.
+    const entry = isIsoDate(key) ? parseDayEntry(value) : undefined;
+    if (isIsoDate(key) && entry !== undefined) entries[key] = entry;
     else droppedKeys.push(key);
   }
   return { entries, droppedKeys, hardFailure: false };
+}
+
+/**
+ * Each effect's first-appearance date across the FULL log (not any export range), so onset is
+ * true first-seen. YYYY-MM-DD sorts chronologically. Pure — no I/O.
+ */
+export function firstOnsetDates(
+  entries: Readonly<Record<IsoDate, DayEntry>>,
+): ReadonlyMap<SideEffect, IsoDate> {
+  const onset = new Map<SideEffect, IsoDate>();
+  const dates = Object.keys(entries)
+    .filter(isIsoDate)
+    .sort((a, b) => a.localeCompare(b));
+  for (const date of dates) {
+    const evening = entries[date]?.evening;
+    if (evening === undefined) continue;
+    for (const effect of SIDE_EFFECTS) {
+      if (evening.sideEffects[effect] === undefined) continue;
+      if (!onset.has(effect)) onset.set(effect, date);
+    }
+  }
+  return onset;
+}
+
+/** The dose active on `date` — the last change on/before it. `doses` is sorted ascending. */
+export function doseActiveOn(doses: readonly DoseChange[], date: IsoDate): Dose | undefined {
+  let active: Dose | undefined;
+  for (const change of doses) {
+    if (change.date.localeCompare(date) <= 0) active = change.dose;
+    else break;
+  }
+  return active;
 }
 
 // ---------------------------------------------------------------------------

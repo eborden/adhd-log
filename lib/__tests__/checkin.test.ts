@@ -45,7 +45,7 @@ describe('draft <-> checkin conversion', () => {
       ratings[key] = 4;
       const checkin: EveningCheckin = {
         ratings: ratingsFromDraft(EVENING_RATING_KEYS, ratings),
-        sideEffects: [],
+        sideEffects: {},
         completedAt: isoTimestampNow(),
       };
       expect(draftFromEvening(checkin).ratings[key]).toBe(4);
@@ -55,12 +55,12 @@ describe('draft <-> checkin conversion', () => {
   it('draftFromEvening keeps side effects and notes', () => {
     const checkin: EveningCheckin = {
       ratings: { mood: 3 },
-      sideEffects: ['nausea'] as const,
+      sideEffects: { nausea: { severity: 'moderate' } },
       notes: 'rough afternoon',
       completedAt: isoTimestampNow(),
     };
     const draft = draftFromEvening(checkin);
-    expect(draft.sideEffects).toEqual(['nausea']);
+    expect(draft.sideEffects).toEqual({ nausea: { severity: 'moderate' } });
     expect(draft.notes).toBe('rough afternoon');
     expect(draft.doseTaken).toBe(false);
   });
@@ -107,14 +107,14 @@ describe('draft <-> checkin conversion', () => {
     const ts = isoTimestampNow();
     const draft: Draft = {
       ...EMPTY_DRAFT,
-      sideEffects: ['nausea'],
+      sideEffects: { nausea: { severity: 'mild' } },
       notes: '  rough afternoon  ',
       ratings: { mood: 3 },
     };
     const checkin = eveningFromDraft(draft, ts);
     expect(checkin.completedAt).toBe(ts);
     expect(checkin.notes).toBe('rough afternoon');
-    expect(checkin.sideEffects).toEqual(['nausea']);
+    expect(checkin.sideEffects).toEqual({ nausea: { severity: 'mild' } });
     const back = draftFromEvening(checkin);
     expect(back.ratings.mood).toBe(3);
     expect(back.notes).toBe('rough afternoon');
