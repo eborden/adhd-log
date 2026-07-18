@@ -22,4 +22,8 @@ function multiRemove(keys: readonly string[]): Promise<void> {
   return Promise.resolve();
 }
 
-export default { getItem, setItem, multiRemove };
+function getAllKeys(): Promise<readonly string[]> {
+  return Promise.resolve([...store.keys()]);
+}
+
+export default { getItem, setItem, multiRemove, getAllKeys };

@@ -175,6 +175,31 @@ export function parseEntries(raw: unknown): Parsed<Readonly<Record<IsoDate, DayE
   return { ok: false, reason: 'Malformed entries JSON' };
 }
 
+export interface EntriesParse {
+  /** The days that parsed cleanly. */
+  readonly entries: Readonly<Record<IsoDate, DayEntry>>;
+  /** Keys that failed `isDayEntry` or weren't a valid `IsoDate` — quarantined, not merged. */
+  readonly droppedKeys: readonly string[];
+  /** The raw value wasn't even an object — a non-empty but unreadable store, not a fresh one. */
+  readonly hardFailure: boolean;
+}
+
+/**
+ * Parses the entries map day-by-day so a single corrupt record costs one day, not the whole
+ * longitudinal history. `hardFailure` distinguishes "unreadable store" (don't clobber) from a
+ * genuinely empty one.
+ */
+export function parseEntriesTolerant(raw: unknown): EntriesParse {
+  if (!isRecord(raw)) return { entries: {}, droppedKeys: [], hardFailure: true };
+  const entries: Record<IsoDate, DayEntry> = {};
+  const droppedKeys: string[] = [];
+  for (const [key, value] of Object.entries(raw)) {
+    if (isIsoDate(key) && isDayEntry(value)) entries[key] = value;
+    else droppedKeys.push(key);
+  }
+  return { entries, droppedKeys, hardFailure: false };
+}
+
 // ---------------------------------------------------------------------------
 // Date / streak / dose-timeline helpers — pure, no I/O.
 // ---------------------------------------------------------------------------
@@ -293,9 +318,9 @@ export async function saveProfile(profile: Profile): Promise<void> {
 
 export async function loadDoseChanges(): Promise<readonly DoseChange[]> {
   const raw = await readJson(STORAGE_KEYS.doses);
-  if (raw === null) return [];
-  const parsed = parseDoseChangeList(raw);
-  return parsed.ok ? parsed.value : [];
+  // Tolerant per-element parse: one malformed change drops that entry, not the whole timeline.
+  if (!isUnknownArray(raw)) return [];
+  return raw.filter(isDoseChange);
 }
 
 export async function saveDoseChanges(doses: readonly DoseChange[]): Promise<void> {
@@ -309,11 +334,34 @@ export async function appendDoseChange(change: DoseChange): Promise<readonly Dos
   return next;
 }
 
+/**
+ * Reads the entries store, returning both the tolerant parse and the original raw string (for
+ * quarantine). Unparseable JSON is a hard failure — a non-empty but unreadable store — distinct
+ * from a genuinely absent one (`rawString === null`).
+ */
+async function loadEntriesRaw(): Promise<{
+  readonly rawString: string | null;
+  readonly parse: EntriesParse;
+}> {
+  const rawString = await AsyncStorage.getItem(STORAGE_KEYS.entries);
+  if (rawString === null) {
+    return { rawString: null, parse: { entries: {}, droppedKeys: [], hardFailure: false } };
+  }
+  try {
+    return { rawString, parse: parseEntriesTolerant(JSON.parse(rawString) as unknown) };
+  } catch {
+    return { rawString, parse: { entries: {}, droppedKeys: [], hardFailure: true } };
+  }
+}
+
+/** Copies an unreadable/partially-bad raw blob to a timestamped key so it can be recovered. */
+async function quarantineEntries(rawString: string | null): Promise<void> {
+  if (rawString === null) return;
+  await AsyncStorage.setItem(`${STORAGE_KEYS.entries}.corrupt.${isoTimestampNow()}`, rawString);
+}
+
 export async function loadEntries(): Promise<Readonly<Record<IsoDate, DayEntry>>> {
-  const raw = await readJson(STORAGE_KEYS.entries);
-  if (raw === null) return {};
-  const parsed = parseEntries(raw);
-  return parsed.ok ? parsed.value : {};
+  return (await loadEntriesRaw()).parse.entries;
 }
 
 export async function saveEntries(entries: Readonly<Record<IsoDate, DayEntry>>): Promise<void> {
@@ -326,7 +374,18 @@ export type CheckinInput =
 
 /** Writes one session's check-in for `date`, preserving the other session. */
 export async function saveCheckin(date: IsoDate, input: CheckinInput): Promise<DayEntry> {
-  const entries = await loadEntries();
+  const { rawString, parse } = await loadEntriesRaw();
+  // Refuse to merge onto an empty map when the store is merely unreadable — that would
+  // overwrite recoverable history. Quarantine the raw blob and abort instead.
+  if (parse.hardFailure) {
+    await quarantineEntries(rawString);
+    throw new Error('Entries store is unreadable; aborting save to avoid overwriting data.');
+  }
+  // A partial failure is safe to merge onto the survivors, but preserve the bad blob first.
+  if (parse.droppedKeys.length > 0) {
+    await quarantineEntries(rawString);
+  }
+  const entries = parse.entries;
   const existing = entries[date];
   const merged: DayEntry = {
     date,

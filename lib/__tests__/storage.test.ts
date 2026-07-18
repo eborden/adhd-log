@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   addDays,
   appendDoseChange,
+  type CheckinInput,
   clearAllData,
   computeStreak,
   doseChangeMarkers,
@@ -25,6 +26,7 @@ import {
   loadProfile,
   parseDoseChangeList,
   parseEntries,
+  parseEntriesTolerant,
   parseIsoDate,
   parseProfile,
   restoreBackup,
@@ -465,5 +467,97 @@ describe('persistence', () => {
     expect(await loadProfile()).toBeNull();
     expect(await loadDoseChanges()).toEqual([]);
     expect(await loadEntries()).toEqual({});
+  });
+});
+
+describe('parseEntriesTolerant', () => {
+  const goodDay = {
+    date: '2026-07-01',
+    morning: {
+      doseTaken: true,
+      sleepQuality: 4,
+      wakingMood: 3,
+      completedAt: '2026-07-01T07:00:00.000Z',
+    },
+  };
+
+  it('keeps good days and lists the dropped keys', () => {
+    const parsed = parseEntriesTolerant({
+      '2026-07-01': goodDay,
+      '2026-07-02': { date: '2026-07-02', morning: { sleepQuality: 9 } },
+      'not-a-date': goodDay,
+    });
+    expect(Object.keys(parsed.entries)).toEqual(['2026-07-01']);
+    expect([...parsed.droppedKeys].sort()).toEqual(['2026-07-02', 'not-a-date']);
+    expect(parsed.hardFailure).toBe(false);
+  });
+
+  it('reports a hard failure for non-object input', () => {
+    expect(parseEntriesTolerant('nope')).toEqual({
+      entries: {},
+      droppedKeys: [],
+      hardFailure: true,
+    });
+    expect(parseEntriesTolerant([]).hardFailure).toBe(true);
+  });
+});
+
+describe('tolerant persistence', () => {
+  const morningInput: CheckinInput = {
+    session: 'morning',
+    checkin: { doseTaken: true, sleepQuality: 4, wakingMood: 4, completedAt: isoTimestampNow() },
+  };
+
+  it('saveCheckin aborts and quarantines when the stored entries are unreadable', async () => {
+    await AsyncStorage.setItem('entries', '{not valid json');
+    await expect(saveCheckin('2026-07-17' as IsoDate, morningInput)).rejects.toThrow(/unreadable/);
+    // The original bad blob is left intact, not overwritten by the single new day.
+    expect(await AsyncStorage.getItem('entries')).toBe('{not valid json');
+    const corruptKey = (await AsyncStorage.getAllKeys()).find((key) =>
+      key.startsWith('entries.corrupt.'),
+    );
+    expect(corruptKey).toBeDefined();
+    if (corruptKey !== undefined) {
+      expect(await AsyncStorage.getItem(corruptKey)).toBe('{not valid json');
+    }
+  });
+
+  it('saveCheckin writes onto a genuinely empty store', async () => {
+    const entry = await saveCheckin('2026-07-17' as IsoDate, morningInput);
+    expect(entry.morning?.sleepQuality).toBe(4);
+    expect((await loadEntries())['2026-07-17' as IsoDate]?.morning?.sleepQuality).toBe(4);
+  });
+
+  it('saveCheckin merges onto survivors when some stored days are corrupt', async () => {
+    await AsyncStorage.setItem(
+      'entries',
+      JSON.stringify({
+        '2026-07-01': {
+          date: '2026-07-01',
+          evening: { mood: 3, sideEffects: [], completedAt: '2026-07-01T20:00:00.000Z' },
+        },
+        bad: { nope: true },
+      }),
+    );
+    await saveCheckin('2026-07-02' as IsoDate, morningInput);
+    expect(Object.keys(await loadEntries()).sort()).toEqual(['2026-07-01', '2026-07-02']);
+    expect(
+      (await AsyncStorage.getAllKeys()).some((key) => key.startsWith('entries.corrupt.')),
+    ).toBe(true);
+  });
+
+  it('loadDoseChanges drops a malformed change and keeps the rest', async () => {
+    await AsyncStorage.setItem(
+      'doses',
+      JSON.stringify([
+        { date: '2026-07-01', dose: { amount: 20, unit: 'mg' } },
+        { date: 'bad' },
+        { date: '2026-07-05', dose: { amount: 40, unit: 'mg' } },
+      ]),
+    );
+    expect((await loadDoseChanges()).map((change) => change.date)).toEqual([
+      '2026-07-01',
+      '2026-07-05',
+    ]);
   });
 });
