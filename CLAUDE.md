@@ -73,7 +73,9 @@ strictness flag above still applies in full to our own source.
   `entry/[date]`, onboarding).
 - `components/` — thin, presentational (ScaleSelector, Chips, Toggle, Stepper, LockScreen).
 - `lib/` — `types`, `schema` (metric discriminated union — single source of truth for
-  check-in fields), `storage`, `notifications`, `export`, `theme`, `__tests__/`.
+  check-in fields), `checkin` (RN-free `Draft` state + session construction from the schema),
+  `storage`, `notifications`, `export`, `tokens` (design primitives) → `theme` (semantic
+  layer), `__tests__/`.
 
 Add or rename a tracked metric in `lib/schema.ts` only; both check-in sessions render
 generically from it.
