@@ -266,6 +266,41 @@ export function bucketByDosePeriod(
   return buckets;
 }
 
+/**
+ * The `windowDays` before a dose change vs the `windowDays` on/after it — a descriptive
+ * dose-response view. Reads the full `entries` map, so the windows reach outside the display
+ * range (a 7-day report can still surface the 14-day before/after around a change).
+ */
+export interface BeforeAfter {
+  readonly change: DoseChange;
+  readonly windowDays: number;
+  readonly before: ReadonlyMap<RatingKey, MetricAverage>;
+  readonly after: ReadonlyMap<RatingKey, MetricAverage>;
+}
+
+export function beforeAfterDose(
+  entries: Readonly<Record<IsoDate, DayEntry>>,
+  change: DoseChange,
+  windowDays: number,
+): BeforeAfter {
+  const beforeRows = rowsInRange(
+    entries,
+    datesInRange(addDays(change.date, -windowDays), addDays(change.date, -1)),
+  );
+  const afterRows = rowsInRange(
+    entries,
+    datesInRange(change.date, addDays(change.date, windowDays - 1)),
+  );
+  const before = new Map<RatingKey, MetricAverage>();
+  const after = new Map<RatingKey, MetricAverage>();
+  for (const key of REPORT_RATING_ORDER) {
+    const pick = ratingAccessor(isMorningRatingKey(key) ? 'morning' : 'evening', key);
+    before.set(key, metricAverage(beforeRows, pick));
+    after.set(key, metricAverage(afterRows, pick));
+  }
+  return { change, windowDays, before, after };
+}
+
 /** Rows for a date range, oldest first, filling gaps with empty (unlogged) days. */
 export function rowsInRange(
   entries: Readonly<Record<IsoDate, DayEntry>>,
@@ -545,6 +580,41 @@ function periodTableHtml(
 }
 
 /**
+ * A before/after table per dose change: before-window mean, after-window mean, and a change arrow
+ * routed through `computeTrend` (so the MIN_HALF_SAMPLES floor applies) with the metric's own
+ * value-free scale-anchor caption. Metrics empty on both sides are omitted.
+ */
+function beforeAfterHtml(items: readonly BeforeAfter[]): string {
+  const fmt = (average: MetricAverage): string =>
+    average.kind === 'empty' ? '—' : average.mean.toFixed(1);
+  const blocks = items.flatMap((item) => {
+    const metricRows = REPORT_RATING_ORDER.flatMap((key) => {
+      const metric = scaleMetricFor(key);
+      if (metric === undefined) return [];
+      const before = item.before.get(key) ?? { kind: 'empty' as const };
+      const after = item.after.get(key) ?? { kind: 'empty' as const };
+      if (before.kind === 'empty' && after.kind === 'empty') return [];
+      const trend = computeTrend(before, after);
+      const caption = escapeHtml(scaleAnchorCaption(metric));
+      const changeCell =
+        trend.kind === 'insufficient'
+          ? `— <span class="muted">(${caption})</span>`
+          : `${arrowGlyph(trend.direction)} <span class="muted">(${caption})</span>`;
+      return [
+        `<tr><td>${escapeHtml(metric.label)}</td><td>${fmt(before)}</td><td>${fmt(after)}</td><td>${changeCell}</td></tr>`,
+      ];
+    });
+    if (metricRows.length === 0) return [];
+    const title = `${formatDose(item.change.dose)} on ${escapeHtml(item.change.date)} (±${String(item.windowDays)} days)`;
+    return [
+      `<p><strong>${title}</strong></p>
+       <table><tr><th>Metric</th><th>Before</th><th>After</th><th>Change</th></tr>${metricRows.join('')}</table>`,
+    ];
+  });
+  return blocks.length === 0 ? '' : `<h2>Before / after dose changes</h2>${blocks.join('')}`;
+}
+
+/**
  * Options for a report render. Range is resolved before this call (via `datesInRange` /
  * `lastNDates`) and arrives as explicit `rangeStart`/`rangeEnd` params, so it is deliberately
  * not a field here.
@@ -628,6 +698,16 @@ export function buildReportHtml(
     'Dose-period averages',
     bucketByDosePeriod(entries, doses, rangeStart, rangeEnd),
     rows,
+  );
+
+  // Before/after each dose change that falls inside the range; windows reach outside it via entries.
+  const beforeAfterSection = beforeAfterHtml(
+    doses
+      .filter(
+        (change) =>
+          change.date.localeCompare(rangeStart) >= 0 && change.date.localeCompare(rangeEnd) <= 0,
+      )
+      .map((change) => beforeAfterDose(entries, change, options.beforeAfterWindowDays)),
   );
 
   const header = profile
@@ -736,6 +816,7 @@ export function buildReportHtml(
       ${doseTimeline}
       ${weeklySection}
       ${dosePeriodSection}
+      ${beforeAfterSection}
       ${sideEffectsSection}
       ${notesSection}
       <h2>Daily log</h2>

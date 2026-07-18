@@ -3,6 +3,7 @@ import { __setMockFileExists, __setMockPickedText } from '../__mocks__/expo-file
 import {
   adherenceInRange,
   averageOf,
+  beforeAfterDose,
   bucketByDosePeriod,
   bucketByWeek,
   buildBackup,
@@ -236,6 +237,21 @@ describe('bucketByDosePeriod', () => {
   });
 });
 
+describe('beforeAfterDose', () => {
+  it('averages the window before vs on/after a dose change, reaching into the full entries map', () => {
+    const entries = entriesFrom([
+      ...eveningDays('2026-07-01' as IsoDate, 3, 2), // Jul 1–3, mood 2 (before)
+      ...eveningDays('2026-07-04' as IsoDate, 5, 4), // Jul 4–8, mood 4 (on/after)
+    ]);
+    const change: DoseChange = { date: '2026-07-04' as IsoDate, dose: { amount: 40, unit: 'mg' } };
+    const ba = beforeAfterDose(entries, change, 14);
+    expect(ba.before.get('mood')).toEqual({ kind: 'value', mean: 2, n: 3 });
+    expect(ba.after.get('mood')).toEqual({ kind: 'value', mean: 4, n: 5 });
+    // uneven, and a never-logged metric is empty on both sides (routes to insufficient via computeTrend)
+    expect(ba.before.get('libido')).toEqual({ kind: 'empty' });
+  });
+});
+
 describe('buildReportHtml', () => {
   it('includes the medication name, dose average, and daily rows', () => {
     const profile: Profile = {
@@ -411,6 +427,19 @@ describe('buildReportHtml', () => {
     const html = htmlFromRows(null, [], eveningDays('2026-05-01' as IsoDate, 60, 3));
     expect(html).not.toContain('Weekly averages');
     expect(html).toContain('Dose-period averages');
+  });
+
+  it('renders a before/after table with a change arrow for a dose change inside the range', () => {
+    const rows = [
+      ...eveningDays('2026-07-01' as IsoDate, 4, 2), // before: mood 2
+      ...eveningDays('2026-07-05' as IsoDate, 4, 4), // on/after: mood 4
+    ];
+    const doses: readonly DoseChange[] = [
+      { date: '2026-07-05' as IsoDate, dose: { amount: 40, unit: 'mg' } },
+    ];
+    const html = htmlFromRows(null, doses, rows);
+    expect(html).toContain('Before / after dose changes');
+    expect(html).toContain('40mg on 2026-07-05');
   });
 
   it('shows the multi-dose caveat when a dose change falls inside the range', () => {
