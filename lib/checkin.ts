@@ -1,5 +1,8 @@
 import {
+  EVENING_RATING_KEYS,
   type EveningCheckin,
+  type IsoTimestamp,
+  MORNING_RATING_KEYS,
   type MorningCheckin,
   type Rating,
   type RatingKey,
@@ -67,6 +70,30 @@ export function draftFromEvening(checkin: EveningCheckin): Draft {
     sleepHours: undefined,
     sideEffects: checkin.sideEffects,
     notes: checkin.notes ?? '',
+  };
+}
+
+/**
+ * The persisted morning check-in for a draft. Inverse of `draftFromMorning`. `completedAt` is
+ * passed in (not read from the clock) so this stays pure and testable.
+ */
+export function morningFromDraft(draft: Draft, completedAt: IsoTimestamp): MorningCheckin {
+  return {
+    ratings: ratingsFromDraft(MORNING_RATING_KEYS, draft.ratings),
+    doseTaken: draft.doseTaken,
+    completedAt,
+    ...(draft.sleepHours !== undefined ? { sleepHours: draft.sleepHours } : {}),
+  };
+}
+
+/** The persisted evening check-in for a draft. Inverse of `draftFromEvening`. */
+export function eveningFromDraft(draft: Draft, completedAt: IsoTimestamp): EveningCheckin {
+  const notes = draft.notes.trim();
+  return {
+    ratings: ratingsFromDraft(EVENING_RATING_KEYS, draft.ratings),
+    sideEffects: draft.sideEffects,
+    completedAt,
+    ...(notes !== '' ? { notes } : {}),
   };
 }
 

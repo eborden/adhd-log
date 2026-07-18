@@ -3,8 +3,11 @@ import {
   EMPTY_DRAFT,
   draftFromEvening,
   draftFromMorning,
+  eveningFromDraft,
+  morningFromDraft,
   parseDoseAmount,
   ratingsFromDraft,
+  type Draft,
 } from '../checkin';
 import { isoTimestampNow } from '../storage';
 import { EVENING_RATING_KEYS, MORNING_RATING_KEYS } from '../types';
@@ -79,6 +82,50 @@ describe('draft <-> checkin conversion', () => {
   it('EMPTY_DRAFT starts with dose taken and no ratings', () => {
     expect(EMPTY_DRAFT.doseTaken).toBe(true);
     expect(EMPTY_DRAFT.ratings).toEqual({});
+  });
+
+  it('round-trips a morning draft (draft -> checkin -> draft)', () => {
+    const ts = isoTimestampNow();
+    const draft: Draft = {
+      ...EMPTY_DRAFT,
+      doseTaken: false,
+      sleepHours: 6,
+      ratings: { sleepQuality: 4, wakingMood: 2 },
+    };
+    const checkin = morningFromDraft(draft, ts);
+    expect(checkin.completedAt).toBe(ts);
+    expect(checkin.doseTaken).toBe(false);
+    expect(checkin.sleepHours).toBe(6);
+    const back = draftFromMorning(checkin);
+    expect(back.ratings.sleepQuality).toBe(4);
+    expect(back.ratings.wakingMood).toBe(2);
+    expect(back.doseTaken).toBe(false);
+    expect(back.sleepHours).toBe(6);
+  });
+
+  it('round-trips an evening draft, trimming and keeping notes/side effects', () => {
+    const ts = isoTimestampNow();
+    const draft: Draft = {
+      ...EMPTY_DRAFT,
+      sideEffects: ['nausea'],
+      notes: '  rough afternoon  ',
+      ratings: { mood: 3 },
+    };
+    const checkin = eveningFromDraft(draft, ts);
+    expect(checkin.completedAt).toBe(ts);
+    expect(checkin.notes).toBe('rough afternoon');
+    expect(checkin.sideEffects).toEqual(['nausea']);
+    const back = draftFromEvening(checkin);
+    expect(back.ratings.mood).toBe(3);
+    expect(back.notes).toBe('rough afternoon');
+  });
+
+  it('omits sleepHours (morning) and notes (evening) when empty/undefined', () => {
+    const ts = isoTimestampNow();
+    const morning = morningFromDraft({ ...EMPTY_DRAFT, sleepHours: undefined }, ts);
+    expect('sleepHours' in morning).toBe(false);
+    const evening = eveningFromDraft({ ...EMPTY_DRAFT, notes: '   ' }, ts);
+    expect('notes' in evening).toBe(false);
   });
 });
 

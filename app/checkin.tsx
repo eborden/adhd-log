@@ -22,7 +22,8 @@ import {
   EMPTY_DRAFT,
   draftFromEvening,
   draftFromMorning,
-  ratingsFromDraft,
+  eveningFromDraft,
+  morningFromDraft,
   type Draft,
 } from '../lib/checkin';
 import { EVENING_METRICS, MORNING_METRICS, enabledEveningMetricKeys } from '../lib/schema';
@@ -36,15 +37,8 @@ import {
   todayIsoDate,
 } from '../lib/storage';
 import { radius, space, typography, useTheme } from '../lib/theme';
-import { assertNever, EVENING_RATING_KEYS, MORNING_RATING_KEYS } from '../lib/types';
-import type {
-  EveningCheckin,
-  IsoDate,
-  Metric,
-  MorningCheckin,
-  Profile,
-  Session,
-} from '../lib/types';
+import { assertNever } from '../lib/types';
+import type { IsoDate, Metric, Profile, Session } from '../lib/types';
 
 function isSession(value: string | undefined): value is Session {
   return value === 'morning' || value === 'evening';
@@ -102,25 +96,18 @@ export default function Checkin() {
   const isComplete = requiredKeys.every((key) => draft.ratings[key] !== undefined);
 
   const handleSave = async (): Promise<void> => {
+    if (!isComplete) return;
+    const completedAt = isoTimestampNow();
     if (session === 'morning') {
-      if (!isComplete) return;
-      const checkin: MorningCheckin = {
-        ratings: ratingsFromDraft(MORNING_RATING_KEYS, draft.ratings),
-        doseTaken: draft.doseTaken,
-        completedAt: isoTimestampNow(),
-        ...(draft.sleepHours !== undefined ? { sleepHours: draft.sleepHours } : {}),
-      };
-      await saveCheckin(date, { session: 'morning', checkin });
+      await saveCheckin(date, {
+        session: 'morning',
+        checkin: morningFromDraft(draft, completedAt),
+      });
     } else {
-      if (!isComplete) return;
-      const trimmedNotes = draft.notes.trim();
-      const checkin: EveningCheckin = {
-        ratings: ratingsFromDraft(EVENING_RATING_KEYS, draft.ratings),
-        sideEffects: draft.sideEffects,
-        completedAt: isoTimestampNow(),
-        ...(trimmedNotes !== '' ? { notes: trimmedNotes } : {}),
-      };
-      await saveCheckin(date, { session: 'evening', checkin });
+      await saveCheckin(date, {
+        session: 'evening',
+        checkin: eveningFromDraft(draft, completedAt),
+      });
     }
     router.back();
   };
