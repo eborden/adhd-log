@@ -53,7 +53,7 @@ export default function Trends() {
     ...EVENING_METRICS.filter((metric) => {
       if (metric.kind !== 'scale') return false;
       const accessor = ratingAccessor('evening', metric.key);
-      return accessor !== undefined && rows.some((row) => accessor(row) !== undefined);
+      return rows.some((row) => accessor(row) !== undefined);
     }).map((metric) => ({ metric, session: 'evening' as const })),
   ];
 
@@ -95,7 +95,7 @@ export default function Trends() {
             </Text>
             <View style={styles.barsRow}>
               {rows.map((row, index) => {
-                const rating = accessor?.(row);
+                const rating = accessor(row);
                 return (
                   <View key={dates[index] ?? index} style={styles.barColumn}>
                     <View

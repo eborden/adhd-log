@@ -4,6 +4,7 @@ import {
   EVENING_RATING_KEYS,
   HOURS,
   MINUTES,
+  MORNING_RATING_KEYS,
   SIDE_EFFECTS,
   type DayEntry,
   type Dose,
@@ -17,6 +18,7 @@ import {
   type MedName,
   type Minute,
   type MorningCheckin,
+  type MorningRatingKey,
   type Parsed,
   type Profile,
   type Rating,
@@ -71,6 +73,10 @@ export function isSideEffect(value: unknown): value is SideEffect {
 
 export function isEveningRatingKey(value: unknown): value is EveningRatingKey {
   return typeof value === 'string' && (EVENING_RATING_KEYS as readonly string[]).includes(value);
+}
+
+export function isMorningRatingKey(value: unknown): value is MorningRatingKey {
+  return typeof value === 'string' && (MORNING_RATING_KEYS as readonly string[]).includes(value);
 }
 
 export function isTimeOfDay(value: unknown): value is TimeOfDay {

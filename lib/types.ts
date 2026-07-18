@@ -44,6 +44,9 @@ export const SIDE_EFFECTS = [
 ] as const;
 export type SideEffect = (typeof SIDE_EFFECTS)[number];
 
+export const MORNING_RATING_KEYS = ['sleepQuality', 'wakingMood'] as const;
+export type MorningRatingKey = (typeof MORNING_RATING_KEYS)[number];
+
 export const EVENING_RATING_KEYS = [
   'mood',
   'focus',
@@ -110,16 +113,7 @@ export interface DayEntry {
 }
 
 /** Every Rating-valued field across both check-in sessions. */
-export type RatingKey =
-  | 'sleepQuality'
-  | 'wakingMood'
-  | 'mood'
-  | 'focus'
-  | 'impulsivity'
-  | 'anxiety'
-  | 'energy'
-  | 'appetite'
-  | 'libido';
+export type RatingKey = MorningRatingKey | EveningRatingKey;
 
 export type ScaleDirection = 'higher-better' | 'lower-better' | 'neutral';
 

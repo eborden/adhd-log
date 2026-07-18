@@ -6,14 +6,15 @@ import { palette } from './tokens';
 import {
   isDoseChangeList,
   isEntries,
+  isEveningRatingKey,
   isIsoTimestamp,
+  isMorningRatingKey,
   isoTimestampNow,
   parseProfile,
 } from './storage';
 import type {
   DayEntry,
   DoseChange,
-  EveningRatingKey,
   IsoDate,
   IsoTimestamp,
   Metric,
@@ -29,33 +30,22 @@ import type {
 // Pure assembly logic — no I/O, unit tested.
 // ---------------------------------------------------------------------------
 
-type MorningRatingKey = 'sleepQuality' | 'wakingMood';
-
-const MORNING_ACCESSORS: Readonly<Record<MorningRatingKey, (row: DayEntry) => Rating | undefined>> =
-  {
-    sleepQuality: (row) => row.morning?.sleepQuality,
-    wakingMood: (row) => row.morning?.wakingMood,
-  };
-
-const EVENING_ACCESSORS: Readonly<Record<EveningRatingKey, (row: DayEntry) => Rating | undefined>> =
-  {
-    mood: (row) => row.evening?.mood,
-    focus: (row) => row.evening?.focus,
-    impulsivity: (row) => row.evening?.impulsivity,
-    anxiety: (row) => row.evening?.anxiety,
-    energy: (row) => row.evening?.energy,
-    appetite: (row) => row.evening?.appetite,
-    libido: (row) => row.evening?.libido,
-  };
-
-/** The accessor for a scale metric's value, keyed by which session it belongs to. */
+/**
+ * The accessor for a scale metric's value, keyed by which session it belongs to. Under
+ * `noUncheckedIndexedAccess` a keyed read is already `Rating | undefined`, so a single generic
+ * accessor replaces the hand-written per-key maps. The session/key pairing is narrowed through
+ * the schema key guards (a key that doesn't belong to the session always reads `undefined`).
+ */
 export function ratingAccessor(
   session: Session,
   key: RatingKey,
-): ((row: DayEntry) => Rating | undefined) | undefined {
-  const accessors: Readonly<Record<string, (row: DayEntry) => Rating | undefined>> =
-    session === 'morning' ? MORNING_ACCESSORS : EVENING_ACCESSORS;
-  return accessors[key];
+): (row: DayEntry) => Rating | undefined {
+  if (session === 'morning') {
+    if (!isMorningRatingKey(key)) return () => undefined;
+    return (row) => row.morning?.[key];
+  }
+  if (!isEveningRatingKey(key)) return () => undefined;
+  return (row) => row.evening?.[key];
 }
 
 export function averageOf(
@@ -75,18 +65,16 @@ export interface ScaleAverage {
 
 function computeScaleAverages(
   metrics: readonly Metric[],
-  accessors: Readonly<Record<string, (row: DayEntry) => Rating | undefined>>,
+  session: Session,
   rows: readonly DayEntry[],
 ): readonly ScaleAverage[] {
   const result: ScaleAverage[] = [];
   for (const metric of metrics) {
     if (metric.kind !== 'scale') continue;
-    const accessor = accessors[metric.key];
-    if (accessor === undefined) continue;
     result.push({
       label: metric.label,
       direction: metric.direction,
-      average: averageOf(rows, accessor),
+      average: averageOf(rows, ratingAccessor(session, metric.key)),
     });
   }
   return result;
@@ -122,8 +110,8 @@ export function buildReportHtml(
   doses: readonly DoseChange[],
   rows: readonly DayEntry[],
 ): string {
-  const morningAverages = computeScaleAverages(MORNING_METRICS, MORNING_ACCESSORS, rows);
-  const eveningAverages = computeScaleAverages(EVENING_METRICS, EVENING_ACCESSORS, rows).filter(
+  const morningAverages = computeScaleAverages(MORNING_METRICS, 'morning', rows);
+  const eveningAverages = computeScaleAverages(EVENING_METRICS, 'evening', rows).filter(
     (average) => average.average !== null,
   );
 

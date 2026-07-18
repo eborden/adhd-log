@@ -19,7 +19,13 @@ export default defineConfig({
     include: ['lib/__tests__/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      include: ['lib/types.ts', 'lib/schema.ts', 'lib/storage.ts', 'lib/export.ts'],
+      include: [
+        'lib/types.ts',
+        'lib/schema.ts',
+        'lib/storage.ts',
+        'lib/export.ts',
+        'lib/checkin.ts',
+      ],
       thresholds: {
         lines: 90,
         statements: 90,

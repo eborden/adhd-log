@@ -2,10 +2,30 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../components/Card';
-import { SIDE_EFFECT_LABELS, directionForRatingKey } from '../../lib/schema';
-import { isIsoDate, loadEntries, todayIsoDate } from '../../lib/storage';
+import { ratingAccessor } from '../../lib/export';
+import {
+  EVENING_METRICS,
+  MORNING_METRICS,
+  SIDE_EFFECT_LABELS,
+  directionForRatingKey,
+  enabledEveningMetricKeys,
+} from '../../lib/schema';
+import {
+  isEveningRatingKey,
+  isIsoDate,
+  loadEntries,
+  loadProfile,
+  todayIsoDate,
+} from '../../lib/storage';
 import { ratingColor, space, typography, useTheme } from '../../lib/theme';
-import type { DayEntry, IsoDate, Rating, RatingKey } from '../../lib/types';
+import type { DayEntry, IsoDate, Metric, Profile, Rating, RatingKey } from '../../lib/types';
+
+/** The scale metrics of a session's schema list, narrowed so `.key` is a `RatingKey`. */
+function scaleMetrics(metrics: readonly Metric[]): readonly Extract<Metric, { kind: 'scale' }>[] {
+  return metrics.filter(
+    (metric): metric is Extract<Metric, { kind: 'scale' }> => metric.kind === 'scale',
+  );
+}
 
 function DetailRow({
   label,
@@ -70,19 +90,23 @@ export default function Entry() {
   const params = useLocalSearchParams<{ date?: string }>();
   const date: IsoDate = isIsoDate(params.date) ? params.date : todayIsoDate();
   const [entry, setEntry] = useState<DayEntry | undefined>(undefined);
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   const refresh = useCallback((): void => {
-    loadEntries()
-      .then((entries) => {
+    Promise.all([loadEntries(), loadProfile()])
+      .then(([entries, loadedProfile]) => {
         setEntry(entries[date]);
+        setProfile(loadedProfile);
       })
       .catch(() => undefined);
   }, [date]);
 
   useFocusEffect(refresh);
 
-  const morning = entry?.morning;
-  const evening = entry?.evening;
+  const dayRow: DayEntry = entry ?? { date };
+  const morning = dayRow.morning;
+  const evening = dayRow.evening;
+  const enabledKeys = enabledEveningMetricKeys(profile);
 
   return (
     <ScrollView
@@ -101,12 +125,14 @@ export default function Entry() {
         />
         {morning !== undefined ? (
           <>
-            <RatingRow
-              label="Sleep quality"
-              metricKey="sleepQuality"
-              value={morning.sleepQuality}
-            />
-            <RatingRow label="Waking mood" metricKey="wakingMood" value={morning.wakingMood} />
+            {scaleMetrics(MORNING_METRICS).map((metric) => (
+              <RatingRow
+                key={metric.key}
+                label={metric.label}
+                metricKey={metric.key}
+                value={ratingAccessor('morning', metric.key)(dayRow)}
+              />
+            ))}
             <DetailRow label="Took dose" value={morning.doseTaken ? 'Yes' : 'No'} />
             {morning.sleepHours !== undefined ? (
               <DetailRow label="Hours slept" value={String(morning.sleepHours)} />
@@ -127,13 +153,21 @@ export default function Entry() {
         />
         {evening !== undefined ? (
           <>
-            <RatingRow label="Mood" metricKey="mood" value={evening.mood} />
-            <RatingRow label="Focus" metricKey="focus" value={evening.focus} />
-            <RatingRow label="Impulsivity" metricKey="impulsivity" value={evening.impulsivity} />
-            <RatingRow label="Anxiety" metricKey="anxiety" value={evening.anxiety} />
-            <RatingRow label="Energy" metricKey="energy" value={evening.energy} />
-            <RatingRow label="Appetite" metricKey="appetite" value={evening.appetite} />
-            <RatingRow label="Libido" metricKey="libido" value={evening.libido} />
+            {scaleMetrics(EVENING_METRICS).map((metric) => {
+              const value = ratingAccessor('evening', metric.key)(dayRow);
+              const enabled = isEveningRatingKey(metric.key) && enabledKeys.includes(metric.key);
+              // Show enabled metrics (even if unanswered) plus any disabled metric that still
+              // has data for this day, so turning a metric off never hides logged history.
+              if (!enabled && value === undefined) return null;
+              return (
+                <RatingRow
+                  key={metric.key}
+                  label={metric.label}
+                  metricKey={metric.key}
+                  value={value}
+                />
+              );
+            })}
             {evening.sideEffects.length > 0 ? (
               <DetailRow
                 label="Side effects"

@@ -18,6 +18,13 @@ import { Chips } from '../components/Chips';
 import { ScaleSelector } from '../components/ScaleSelector';
 import { Stepper } from '../components/Stepper';
 import { Toggle } from '../components/Toggle';
+import {
+  EMPTY_DRAFT,
+  draftFromEvening,
+  draftFromMorning,
+  eveningRatingsFromDraft,
+  type Draft,
+} from '../lib/checkin';
 import { EVENING_METRICS, MORNING_METRICS, enabledEveningMetricKeys } from '../lib/schema';
 import {
   isEveningRatingKey,
@@ -36,62 +43,8 @@ import type {
   Metric,
   MorningCheckin,
   Profile,
-  Rating,
-  RatingKey,
   Session,
-  SideEffect,
 } from '../lib/types';
-
-interface Draft {
-  readonly doseTaken: boolean;
-  readonly ratings: Readonly<Partial<Record<RatingKey, Rating>>>;
-  readonly sleepHours: number | undefined;
-  readonly sideEffects: readonly SideEffect[];
-  readonly notes: string;
-}
-
-// A typical night, not the stepper's floor — starting at 0 meant a normal
-// 7-8 hour night took a dozen-plus taps to reach.
-const DEFAULT_SLEEP_HOURS = 7;
-
-const EMPTY_DRAFT: Draft = {
-  // Enabled by default: the common case is that the dose was taken, so a fresh
-  // morning check-in starts with this on. Editing an existing entry still
-  // hydrates the stored value via draftFromMorning.
-  doseTaken: true,
-  ratings: {},
-  sleepHours: DEFAULT_SLEEP_HOURS,
-  sideEffects: [],
-  notes: '',
-};
-
-function draftFromMorning(checkin: MorningCheckin): Draft {
-  return {
-    doseTaken: checkin.doseTaken,
-    ratings: { sleepQuality: checkin.sleepQuality, wakingMood: checkin.wakingMood },
-    sleepHours: checkin.sleepHours ?? DEFAULT_SLEEP_HOURS,
-    sideEffects: [],
-    notes: '',
-  };
-}
-
-function draftFromEvening(checkin: EveningCheckin): Draft {
-  return {
-    doseTaken: false,
-    ratings: {
-      ...(checkin.mood !== undefined ? { mood: checkin.mood } : {}),
-      ...(checkin.focus !== undefined ? { focus: checkin.focus } : {}),
-      ...(checkin.impulsivity !== undefined ? { impulsivity: checkin.impulsivity } : {}),
-      ...(checkin.anxiety !== undefined ? { anxiety: checkin.anxiety } : {}),
-      ...(checkin.energy !== undefined ? { energy: checkin.energy } : {}),
-      ...(checkin.appetite !== undefined ? { appetite: checkin.appetite } : {}),
-      ...(checkin.libido !== undefined ? { libido: checkin.libido } : {}),
-    },
-    sleepHours: undefined,
-    sideEffects: checkin.sideEffects,
-    notes: checkin.notes ?? '',
-  };
-}
 
 function isSession(value: string | undefined): value is Session {
   return value === 'morning' || value === 'evening';
@@ -167,15 +120,7 @@ export default function Checkin() {
       const checkin: EveningCheckin = {
         sideEffects: draft.sideEffects,
         completedAt: isoTimestampNow(),
-        ...(draft.ratings.mood !== undefined ? { mood: draft.ratings.mood } : {}),
-        ...(draft.ratings.focus !== undefined ? { focus: draft.ratings.focus } : {}),
-        ...(draft.ratings.impulsivity !== undefined
-          ? { impulsivity: draft.ratings.impulsivity }
-          : {}),
-        ...(draft.ratings.anxiety !== undefined ? { anxiety: draft.ratings.anxiety } : {}),
-        ...(draft.ratings.energy !== undefined ? { energy: draft.ratings.energy } : {}),
-        ...(draft.ratings.appetite !== undefined ? { appetite: draft.ratings.appetite } : {}),
-        ...(draft.ratings.libido !== undefined ? { libido: draft.ratings.libido } : {}),
+        ...eveningRatingsFromDraft(draft.ratings),
         ...(trimmedNotes !== '' ? { notes: trimmedNotes } : {}),
       };
       await saveCheckin(date, { session: 'evening', checkin });

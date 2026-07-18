@@ -48,13 +48,26 @@ describe('rowsInRange', () => {
 });
 
 describe('ratingAccessor', () => {
-  it('reads morning ratings only from the morning session', () => {
+  it('reads morning ratings from the morning session', () => {
     const accessor = ratingAccessor('morning', 'sleepQuality');
-    expect(accessor?.(morningRow(DAY_1, 5))).toBe(5);
+    expect(accessor(morningRow(DAY_1, 5))).toBe(5);
   });
 
-  it('returns undefined for a key that does not belong to the session', () => {
-    expect(ratingAccessor('morning', 'mood')).toBeUndefined();
+  it('reads evening ratings from the evening session', () => {
+    const row: DayEntry = {
+      date: DAY_1,
+      evening: { mood: 4, sideEffects: [], completedAt: isoTimestampNow() },
+    };
+    expect(ratingAccessor('evening', 'mood')(row)).toBe(4);
+  });
+
+  it('reads undefined for an absent value', () => {
+    expect(ratingAccessor('morning', 'sleepQuality')({ date: DAY_1 })).toBeUndefined();
+  });
+
+  it('reads undefined for a key that does not belong to the session', () => {
+    // 'mood' is an evening key; asking for it in the morning session yields undefined.
+    expect(ratingAccessor('morning', 'mood')(morningRow(DAY_1, 5))).toBeUndefined();
   });
 });
 
