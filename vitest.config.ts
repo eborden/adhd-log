@@ -8,7 +8,7 @@ function mock(name: string): string {
 export default defineConfig({
   resolve: {
     alias: {
-      '@react-native-async-storage/async-storage': '@react-native-async-storage/async-storage/jest',
+      '@react-native-async-storage/async-storage': mock('async-storage'),
       'expo-print': mock('expo-print'),
       'expo-sharing': mock('expo-sharing'),
       'expo-file-system': mock('expo-file-system'),

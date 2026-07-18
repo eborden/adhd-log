@@ -335,5 +335,5 @@ export async function saveCheckin(date: IsoDate, input: CheckinInput): Promise<D
 }
 
 export async function clearAllData(): Promise<void> {
-  await AsyncStorage.removeMany([STORAGE_KEYS.profile, STORAGE_KEYS.doses, STORAGE_KEYS.entries]);
+  await AsyncStorage.multiRemove([STORAGE_KEYS.profile, STORAGE_KEYS.doses, STORAGE_KEYS.entries]);
 }
