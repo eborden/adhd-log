@@ -3,6 +3,45 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Side-effect severity & onset (2026-07-18)
+
+**Problem:** Side effects were a bare `readonly SideEffect[]` — a chip on or off. The
+provider's real branch point on a non-stimulant ramp isn't _whether_ an effect exists, it's
+how bad it is, whether it's fading, and when it started relative to a dose change. "Severe
+nausea, unchanged for three weeks" and "mild nausea gone by day four" were identical data.
+
+**Decision:** Implemented `docs/pending/10-side-effect-severity.md`. Side effects become a
+`SideEffect`-keyed record (`SideEffectReports = Readonly<Partial<Record<SideEffect,
+SideEffectDetail>>>`) carrying a `severity` (`'mild' | 'moderate' | 'severe'`) per effect.
+The keyed record makes duplicate-effect states structurally unrepresentable and turns every
+consumer into a key lookup.
+
+- **Migrate-on-read, provenance preserved.** Legacy `string[]` evening days normalize to a
+  `moderate` default tagged `origin: 'migrated'`. The marker is persisted, so it survives
+  resave and backup round-trips; the report footnotes a migrated default rather than showing
+  it as user-entered. `withSideEffectSeverity` drops the marker the moment the user edits.
+- **Parse-don't-validate, sole minters.** `parseEveningCheckin` / `parseDayEntry` are the
+  only functions that mint the new-shape value; `isEveningCheckin` / `isDayEntry` / `isEntries`
+  are demoted to plain `boolean` validity checks (a `value is EveningCheckin` predicate would
+  be a lie for legacy `string[]` input).
+- **Deviation from the frozen doc:** the doc described an all-or-nothing `parseEntries` /
+  `loadEntries` value path, but the tolerant per-day parse (doc 03) had since landed and is
+  strictly better. Reconciled by folding migrate-on-read into `parseEntriesTolerant` (via
+  `parseDayEntry`) instead of the doc's superseded path, so the "one bad day drops the whole
+  log" residual the doc accepted no longer applies. `parseEntries` (the `Parsed<T>` form)
+  remains the all-or-nothing normalizer that backup import uses.
+- **Zero added friction.** Chip-body tap still toggles select/deselect; severity is a separate
+  secondary control (`components/SeveritySelector.tsx`) that appears only once an effect is
+  selected. Selecting _N_ effects at default stays _N_ taps; Save is never gated by severity.
+- **Report as data, not advice.** New pure helpers `firstOnsetDates` (true first-appearance
+  over the FULL log) and `doseActiveOn` sit each effect's onset next to the dose active then.
+  The report's "Side effects" table shows onset+dose, in-range span, ongoing?, days-reported
+  over logged-evenings, and a run-length severity trajectory, with a range-level adherence
+  caption — no correlation drawn, no improving/worsening verdict.
+- Severity stays a literal union (no numeric score) so nothing invites averaging or risk-ranking.
+
+Supersedes and closes `docs/pending/10-side-effect-severity.md`.
+
 ## Ratings as a record on the check-in types (2026-07-18)
 
 **Problem:** `MorningCheckin`/`EveningCheckin` in `lib/types.ts` hand-declared every
