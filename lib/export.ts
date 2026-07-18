@@ -42,10 +42,10 @@ export function ratingAccessor(
 ): (row: DayEntry) => Rating | undefined {
   if (session === 'morning') {
     if (!isMorningRatingKey(key)) return () => undefined;
-    return (row) => row.morning?.[key];
+    return (row) => row.morning?.ratings[key];
   }
   if (!isEveningRatingKey(key)) return () => undefined;
-  return (row) => row.evening?.[key];
+  return (row) => row.evening?.ratings[key];
 }
 
 export function averageOf(
@@ -150,10 +150,10 @@ export function buildReportHtml(
     .map(
       (row) => `<tr>
         <td>${escapeHtml(row.date)}</td>
-        <td>${formatRating(row.morning?.sleepQuality)}</td>
-        <td>${formatRating(row.morning?.wakingMood)}</td>
-        <td>${formatRating(row.evening?.mood)}</td>
-        <td>${formatRating(row.evening?.focus)}</td>
+        <td>${formatRating(row.morning?.ratings.sleepQuality)}</td>
+        <td>${formatRating(row.morning?.ratings.wakingMood)}</td>
+        <td>${formatRating(row.evening?.ratings.mood)}</td>
+        <td>${formatRating(row.evening?.ratings.focus)}</td>
         <td>${
           row.evening?.sideEffects.length
             ? escapeHtml(

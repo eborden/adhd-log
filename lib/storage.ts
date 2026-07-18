@@ -22,6 +22,7 @@ import {
   type Parsed,
   type Profile,
   type Rating,
+  type RatingKey,
   type SideEffect,
   type TimeOfDay,
 } from './types';
@@ -119,11 +120,20 @@ export function isDoseChangeList(value: unknown): value is readonly DoseChange[]
   return isUnknownArray(value) && value.every(isDoseChange);
 }
 
+// A ratings sub-object: a record whose present keys (restricted to `keys`) each hold a Rating.
+function isRatingsRecord(value: unknown, keys: readonly RatingKey[]): boolean {
+  if (!isRecord(value)) return false;
+  for (const key of keys) {
+    const rating = value[key];
+    if (!(rating === undefined || isRating(rating))) return false;
+  }
+  return true;
+}
+
 export function isMorningCheckin(value: unknown): value is MorningCheckin {
   if (!isRecord(value)) return false;
+  if (!isRatingsRecord(value['ratings'], MORNING_RATING_KEYS)) return false;
   if (typeof value['doseTaken'] !== 'boolean') return false;
-  if (!isRating(value['sleepQuality'])) return false;
-  if (!isRating(value['wakingMood'])) return false;
   if (!isIsoTimestamp(value['completedAt'])) return false;
   const sleepHours = value['sleepHours'];
   return sleepHours === undefined || typeof sleepHours === 'number';
@@ -131,10 +141,7 @@ export function isMorningCheckin(value: unknown): value is MorningCheckin {
 
 export function isEveningCheckin(value: unknown): value is EveningCheckin {
   if (!isRecord(value)) return false;
-  for (const key of EVENING_RATING_KEYS) {
-    const rating = value[key];
-    if (!(rating === undefined || isRating(rating))) return false;
-  }
+  if (!isRatingsRecord(value['ratings'], EVENING_RATING_KEYS)) return false;
   const sideEffects = value['sideEffects'];
   if (!isUnknownArray(sideEffects) || !sideEffects.every(isSideEffect)) return false;
   if (!isIsoTimestamp(value['completedAt'])) return false;

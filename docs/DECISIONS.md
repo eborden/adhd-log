@@ -3,6 +3,36 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Ratings as a record on the check-in types (2026-07-18)
+
+**Problem:** `MorningCheckin`/`EveningCheckin` in `lib/types.ts` hand-declared every
+Rating-valued field by name (`sleepQuality`, `wakingMood`, `mood`, `focus`, …). That
+duplicated the metric list that already lives — as the single source of truth — in
+`lib/schema.ts` / the `*_RATING_KEYS` arrays. Adding a scale metric meant editing the
+schema **and** the interface **and** the storage guard.
+
+**Decision:** Collapse only the homogeneous `Rating` fields of each check-in into a
+`ratings: Partial<Record<…RatingKey, Rating>>` (the shape `Draft.ratings` already uses).
+The heterogeneous one-off fields (`doseTaken`, `sleepHours`, `sideEffects`, `notes`) and
+the `completedAt` metadata stay explicit and legible.
+
+- Deliberately **not** full schema-derived (mapped types over the schema). With exactly one
+  metric per non-scale kind, the type-level machinery (retype arrays `as const`, per-kind
+  value map, `KindForKey` conditional) wasn't worth the density/DX cost, and the _safe_
+  version of full-derive is the complex one anyway.
+- **Morning ratings are now optional at the type level.** The "sleepQuality/wakingMood
+  required" invariant is preserved by the existing runtime completeness gate in
+  `app/checkin.tsx` (`isComplete` over required scale keys) — the same way evening ratings
+  already worked. Not a compile-time guarantee anymore.
+- `lib/checkin.ts`: `eveningRatingsFromDraft` generalized to
+  `ratingsFromDraft<K>(keys, ratings)`, used by both sessions' construction.
+- `lib/storage.ts`: new `isRatingsRecord(value, keys)` guard; `isMorningCheckin`/
+  `isEveningCheckin` validate `ratings` through it. `ratings` must be present (may be `{}`).
+- `lib/export.ts`: `ratingAccessor` and the daily-log table read `…?.ratings[key]`.
+- **Stored JSON shape changed** (ratings nest under `ratings`). No migration written: still
+  in beta. Old-shape on-disk entries fail the new guard and are dropped by
+  `parseEntriesTolerant` (non-destructive — the corrupt blob is quarantined, not clobbered).
+
 ## Extract a shared `<DoseInput>` component (2026-07-18)
 
 **Problem:** The dose amount field + unit-chip picker was copy-pasted almost verbatim across

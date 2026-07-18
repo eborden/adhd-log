@@ -21,20 +21,24 @@ const DAY_3 = '2026-07-03' as IsoDate;
 function morningRow(date: IsoDate, sleepQuality: Rating): DayEntry {
   return {
     date,
-    morning: { doseTaken: true, sleepQuality, wakingMood: 3, completedAt: isoTimestampNow() },
+    morning: {
+      ratings: { sleepQuality, wakingMood: 3 },
+      doseTaken: true,
+      completedAt: isoTimestampNow(),
+    },
   };
 }
 
 describe('averageOf', () => {
   it('averages the values an accessor picks out, skipping missing days', () => {
     const rows: readonly DayEntry[] = [morningRow(DAY_1, 2), { date: DAY_2 }, morningRow(DAY_3, 4)];
-    const average = averageOf(rows, (row) => row.morning?.sleepQuality);
+    const average = averageOf(rows, (row) => row.morning?.ratings.sleepQuality);
     expect(average).toBe(3);
   });
 
   it('returns null when no row has a value', () => {
     const rows: readonly DayEntry[] = [{ date: DAY_1 }, { date: DAY_2 }];
-    expect(averageOf(rows, (row) => row.morning?.sleepQuality)).toBeNull();
+    expect(averageOf(rows, (row) => row.morning?.ratings.sleepQuality)).toBeNull();
   });
 });
 
@@ -56,7 +60,7 @@ describe('ratingAccessor', () => {
   it('reads evening ratings from the evening session', () => {
     const row: DayEntry = {
       date: DAY_1,
-      evening: { mood: 4, sideEffects: [], completedAt: isoTimestampNow() },
+      evening: { ratings: { mood: 4 }, sideEffects: [], completedAt: isoTimestampNow() },
     };
     expect(ratingAccessor('evening', 'mood')(row)).toBe(4);
   });
@@ -101,13 +105,15 @@ describe('buildReportHtml', () => {
     const rowWithSideEffects: DayEntry = {
       date: DAY_1,
       evening: {
-        mood: 3,
-        focus: 3,
-        impulsivity: 2,
-        anxiety: 2,
-        energy: 3,
-        appetite: 3,
-        libido: 3,
+        ratings: {
+          mood: 3,
+          focus: 3,
+          impulsivity: 2,
+          anxiety: 2,
+          energy: 3,
+          appetite: 3,
+          libido: 3,
+        },
         sideEffects: ['nausea', 'headache'],
         completedAt: isoTimestampNow(),
       },
@@ -120,8 +126,7 @@ describe('buildReportHtml', () => {
     const rowMoodFocusOnly: DayEntry = {
       date: DAY_1,
       evening: {
-        mood: 5,
-        focus: 5,
+        ratings: { mood: 5, focus: 5 },
         sideEffects: [],
         completedAt: isoTimestampNow(),
       },
@@ -129,9 +134,7 @@ describe('buildReportHtml', () => {
     const rowWithLibido: DayEntry = {
       date: DAY_2,
       evening: {
-        mood: 3,
-        focus: 3,
-        libido: 4,
+        ratings: { mood: 3, focus: 3, libido: 4 },
         sideEffects: [],
         completedAt: isoTimestampNow(),
       },

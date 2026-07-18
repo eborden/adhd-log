@@ -86,21 +86,14 @@ export interface DoseChange {
 }
 
 export interface MorningCheckin {
+  readonly ratings: Partial<Record<MorningRatingKey, Rating>>;
   readonly doseTaken: boolean;
-  readonly sleepQuality: Rating;
   readonly sleepHours?: number;
-  readonly wakingMood: Rating;
   readonly completedAt: IsoTimestamp;
 }
 
 export interface EveningCheckin {
-  readonly mood?: Rating;
-  readonly focus?: Rating;
-  readonly impulsivity?: Rating;
-  readonly anxiety?: Rating;
-  readonly energy?: Rating;
-  readonly appetite?: Rating;
-  readonly libido?: Rating;
+  readonly ratings: Partial<Record<EveningRatingKey, Rating>>;
   readonly sideEffects: readonly SideEffect[];
   readonly notes?: string;
   readonly completedAt: IsoTimestamp;

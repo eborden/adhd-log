@@ -154,9 +154,8 @@ describe('isDayEntry / isEntries', () => {
   const validEntry = {
     date: '2026-07-17',
     morning: {
+      ratings: { sleepQuality: 4, wakingMood: 3 },
       doseTaken: true,
-      sleepQuality: 4,
-      wakingMood: 3,
       completedAt: '2026-07-17T07:00:00.000Z',
     },
   };
@@ -166,9 +165,12 @@ describe('isDayEntry / isEntries', () => {
   });
 
   it('rejects a day entry with a malformed morning session', () => {
-    expect(isDayEntry({ ...validEntry, morning: { ...validEntry.morning, sleepQuality: 9 } })).toBe(
-      false,
-    );
+    expect(
+      isDayEntry({
+        ...validEntry,
+        morning: { ...validEntry.morning, ratings: { sleepQuality: 9 } },
+      }),
+    ).toBe(false);
   });
 
   it('rejects an entries map with a bad date key', () => {
@@ -184,8 +186,7 @@ describe('isEveningCheckin', () => {
   it('accepts a checkin with only some ratings present', () => {
     expect(
       isEveningCheckin({
-        mood: 4,
-        focus: 3,
+        ratings: { mood: 4, focus: 3 },
         sideEffects: [],
         completedAt: '2026-07-17T20:00:00.000Z',
       }),
@@ -193,19 +194,25 @@ describe('isEveningCheckin', () => {
   });
 
   it('accepts a checkin with no ratings at all', () => {
-    expect(isEveningCheckin({ sideEffects: [], completedAt: '2026-07-17T20:00:00.000Z' })).toBe(
-      true,
-    );
+    expect(
+      isEveningCheckin({ ratings: {}, sideEffects: [], completedAt: '2026-07-17T20:00:00.000Z' }),
+    ).toBe(true);
   });
 
   it('rejects a checkin where a present rating is invalid', () => {
     expect(
       isEveningCheckin({
-        mood: 9,
+        ratings: { mood: 9 },
         sideEffects: [],
         completedAt: '2026-07-17T20:00:00.000Z',
       }),
     ).toBe(false);
+  });
+
+  it('rejects a checkin missing the ratings record entirely', () => {
+    expect(isEveningCheckin({ sideEffects: [], completedAt: '2026-07-17T20:00:00.000Z' })).toBe(
+      false,
+    );
   });
 });
 
@@ -285,7 +292,11 @@ describe('computeStreak', () => {
   function entryWithMorning(date: IsoDate): DayEntry {
     return {
       date,
-      morning: { doseTaken: true, sleepQuality: 3, wakingMood: 3, completedAt: isoTimestampNow() },
+      morning: {
+        ratings: { sleepQuality: 3, wakingMood: 3 },
+        doseTaken: true,
+        completedAt: isoTimestampNow(),
+      },
     };
   }
 
@@ -368,18 +379,24 @@ describe('persistence', () => {
     const date = '2026-07-17' as IsoDate;
     await saveCheckin(date, {
       session: 'morning',
-      checkin: { doseTaken: true, sleepQuality: 4, wakingMood: 4, completedAt: isoTimestampNow() },
+      checkin: {
+        ratings: { sleepQuality: 4, wakingMood: 4 },
+        doseTaken: true,
+        completedAt: isoTimestampNow(),
+      },
     });
     await saveCheckin(date, {
       session: 'evening',
       checkin: {
-        mood: 3,
-        focus: 3,
-        impulsivity: 2,
-        anxiety: 2,
-        energy: 3,
-        appetite: 3,
-        libido: 3,
+        ratings: {
+          mood: 3,
+          focus: 3,
+          impulsivity: 2,
+          anxiety: 2,
+          energy: 3,
+          appetite: 3,
+          libido: 3,
+        },
         sideEffects: [],
         completedAt: isoTimestampNow(),
       },
@@ -387,15 +404,19 @@ describe('persistence', () => {
     const entries = await loadEntries();
     const entry = entries[date];
     expect(entry?.morning?.doseTaken).toBe(true);
-    expect(entry?.evening?.mood).toBe(3);
+    expect(entry?.evening?.ratings.mood).toBe(3);
 
     await saveCheckin(date, {
       session: 'morning',
-      checkin: { doseTaken: false, sleepQuality: 2, wakingMood: 2, completedAt: isoTimestampNow() },
+      checkin: {
+        ratings: { sleepQuality: 2, wakingMood: 2 },
+        doseTaken: false,
+        completedAt: isoTimestampNow(),
+      },
     });
     const updated = (await loadEntries())[date];
-    expect(updated?.morning?.sleepQuality).toBe(2);
-    expect(updated?.evening?.mood).toBe(3);
+    expect(updated?.morning?.ratings.sleepQuality).toBe(2);
+    expect(updated?.evening?.ratings.mood).toBe(3);
   });
 
   it('restoreBackup persists profile, doses, and entries together', async () => {
@@ -407,9 +428,8 @@ describe('persistence', () => {
       ['2026-07-01' as IsoDate]: {
         date: '2026-07-01' as IsoDate,
         morning: {
+          ratings: { sleepQuality: 4, wakingMood: 4 },
           doseTaken: true,
-          sleepQuality: 4,
-          wakingMood: 4,
           completedAt: isoTimestampNow(),
         },
       },
@@ -442,7 +462,7 @@ describe('persistence', () => {
     const entries: Readonly<Record<IsoDate, DayEntry>> = {
       ['2026-07-02' as IsoDate]: {
         date: '2026-07-02' as IsoDate,
-        evening: { mood: 3, sideEffects: [], completedAt: isoTimestampNow() },
+        evening: { ratings: { mood: 3 }, sideEffects: [], completedAt: isoTimestampNow() },
       },
     };
     const backup = buildBackup(profile, doses, entries);
@@ -459,7 +479,11 @@ describe('persistence', () => {
     await appendDoseChange({ date: '2026-07-01' as IsoDate, dose: { amount: 20, unit: 'mg' } });
     await saveCheckin('2026-07-17' as IsoDate, {
       session: 'morning',
-      checkin: { doseTaken: true, sleepQuality: 4, wakingMood: 4, completedAt: isoTimestampNow() },
+      checkin: {
+        ratings: { sleepQuality: 4, wakingMood: 4 },
+        doseTaken: true,
+        completedAt: isoTimestampNow(),
+      },
     });
 
     await clearAllData();
@@ -474,9 +498,8 @@ describe('parseEntriesTolerant', () => {
   const goodDay = {
     date: '2026-07-01',
     morning: {
+      ratings: { sleepQuality: 4, wakingMood: 3 },
       doseTaken: true,
-      sleepQuality: 4,
-      wakingMood: 3,
       completedAt: '2026-07-01T07:00:00.000Z',
     },
   };
@@ -484,7 +507,7 @@ describe('parseEntriesTolerant', () => {
   it('keeps good days and lists the dropped keys', () => {
     const parsed = parseEntriesTolerant({
       '2026-07-01': goodDay,
-      '2026-07-02': { date: '2026-07-02', morning: { sleepQuality: 9 } },
+      '2026-07-02': { date: '2026-07-02', morning: { ratings: { sleepQuality: 9 } } },
       'not-a-date': goodDay,
     });
     expect(Object.keys(parsed.entries)).toEqual(['2026-07-01']);
@@ -505,7 +528,11 @@ describe('parseEntriesTolerant', () => {
 describe('tolerant persistence', () => {
   const morningInput: CheckinInput = {
     session: 'morning',
-    checkin: { doseTaken: true, sleepQuality: 4, wakingMood: 4, completedAt: isoTimestampNow() },
+    checkin: {
+      ratings: { sleepQuality: 4, wakingMood: 4 },
+      doseTaken: true,
+      completedAt: isoTimestampNow(),
+    },
   };
 
   it('saveCheckin aborts and quarantines when the stored entries are unreadable', async () => {
@@ -524,8 +551,8 @@ describe('tolerant persistence', () => {
 
   it('saveCheckin writes onto a genuinely empty store', async () => {
     const entry = await saveCheckin('2026-07-17' as IsoDate, morningInput);
-    expect(entry.morning?.sleepQuality).toBe(4);
-    expect((await loadEntries())['2026-07-17' as IsoDate]?.morning?.sleepQuality).toBe(4);
+    expect(entry.morning?.ratings.sleepQuality).toBe(4);
+    expect((await loadEntries())['2026-07-17' as IsoDate]?.morning?.ratings.sleepQuality).toBe(4);
   });
 
   it('saveCheckin merges onto survivors when some stored days are corrupt', async () => {
@@ -534,7 +561,11 @@ describe('tolerant persistence', () => {
       JSON.stringify({
         '2026-07-01': {
           date: '2026-07-01',
-          evening: { mood: 3, sideEffects: [], completedAt: '2026-07-01T20:00:00.000Z' },
+          evening: {
+            ratings: { mood: 3 },
+            sideEffects: [],
+            completedAt: '2026-07-01T20:00:00.000Z',
+          },
         },
         bad: { nope: true },
       }),

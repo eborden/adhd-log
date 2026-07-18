@@ -22,7 +22,7 @@ import {
   EMPTY_DRAFT,
   draftFromEvening,
   draftFromMorning,
-  eveningRatingsFromDraft,
+  ratingsFromDraft,
   type Draft,
 } from '../lib/checkin';
 import { EVENING_METRICS, MORNING_METRICS, enabledEveningMetricKeys } from '../lib/schema';
@@ -36,7 +36,7 @@ import {
   todayIsoDate,
 } from '../lib/storage';
 import { radius, space, typography, useTheme } from '../lib/theme';
-import { assertNever } from '../lib/types';
+import { assertNever, EVENING_RATING_KEYS, MORNING_RATING_KEYS } from '../lib/types';
 import type {
   EveningCheckin,
   IsoDate,
@@ -103,13 +103,10 @@ export default function Checkin() {
 
   const handleSave = async (): Promise<void> => {
     if (session === 'morning') {
-      const sleepQuality = draft.ratings.sleepQuality;
-      const wakingMood = draft.ratings.wakingMood;
-      if (sleepQuality === undefined || wakingMood === undefined) return;
+      if (!isComplete) return;
       const checkin: MorningCheckin = {
+        ratings: ratingsFromDraft(MORNING_RATING_KEYS, draft.ratings),
         doseTaken: draft.doseTaken,
-        sleepQuality,
-        wakingMood,
         completedAt: isoTimestampNow(),
         ...(draft.sleepHours !== undefined ? { sleepHours: draft.sleepHours } : {}),
       };
@@ -118,9 +115,9 @@ export default function Checkin() {
       if (!isComplete) return;
       const trimmedNotes = draft.notes.trim();
       const checkin: EveningCheckin = {
+        ratings: ratingsFromDraft(EVENING_RATING_KEYS, draft.ratings),
         sideEffects: draft.sideEffects,
         completedAt: isoTimestampNow(),
-        ...eveningRatingsFromDraft(draft.ratings),
         ...(trimmedNotes !== '' ? { notes: trimmedNotes } : {}),
       };
       await saveCheckin(date, { session: 'evening', checkin });

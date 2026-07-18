@@ -1,7 +1,5 @@
 import {
-  EVENING_RATING_KEYS,
   type EveningCheckin,
-  type EveningRatingKey,
   type MorningCheckin,
   type Rating,
   type RatingKey,
@@ -37,14 +35,15 @@ export const EMPTY_DRAFT: Draft = {
 };
 
 /**
- * The persisted evening ratings sub-object, built by looping `EVENING_RATING_KEYS` rather than
- * naming each field. Only defined values are assigned (respecting `exactOptionalPropertyTypes`).
+ * The persisted ratings sub-object for a session, built by looping that session's key list rather
+ * than naming each field. Only defined values are assigned (respecting `exactOptionalPropertyTypes`).
  */
-export function eveningRatingsFromDraft(
+export function ratingsFromDraft<K extends RatingKey>(
+  keys: readonly K[],
   ratings: Readonly<Partial<Record<RatingKey, Rating>>>,
-): Partial<Record<EveningRatingKey, Rating>> {
-  const out: Partial<Record<EveningRatingKey, Rating>> = {};
-  for (const key of EVENING_RATING_KEYS) {
+): Partial<Record<K, Rating>> {
+  const out: Partial<Record<K, Rating>> = {};
+  for (const key of keys) {
     const value = ratings[key];
     if (value !== undefined) out[key] = value;
   }
@@ -54,7 +53,7 @@ export function eveningRatingsFromDraft(
 export function draftFromMorning(checkin: MorningCheckin): Draft {
   return {
     doseTaken: checkin.doseTaken,
-    ratings: { sleepQuality: checkin.sleepQuality, wakingMood: checkin.wakingMood },
+    ratings: { ...checkin.ratings },
     sleepHours: checkin.sleepHours ?? DEFAULT_SLEEP_HOURS,
     sideEffects: [],
     notes: '',
@@ -62,14 +61,9 @@ export function draftFromMorning(checkin: MorningCheckin): Draft {
 }
 
 export function draftFromEvening(checkin: EveningCheckin): Draft {
-  const ratings: Partial<Record<EveningRatingKey, Rating>> = {};
-  for (const key of EVENING_RATING_KEYS) {
-    const value = checkin[key];
-    if (value !== undefined) ratings[key] = value;
-  }
   return {
     doseTaken: false,
-    ratings,
+    ratings: { ...checkin.ratings },
     sleepHours: undefined,
     sideEffects: checkin.sideEffects,
     notes: checkin.notes ?? '',

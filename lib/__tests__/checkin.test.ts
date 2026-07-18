@@ -1,28 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import {
-  EMPTY_DRAFT,
-  draftFromEvening,
-  draftFromMorning,
-  eveningRatingsFromDraft,
-} from '../checkin';
+import { EMPTY_DRAFT, draftFromEvening, draftFromMorning, ratingsFromDraft } from '../checkin';
 import { isoTimestampNow } from '../storage';
-import { EVENING_RATING_KEYS } from '../types';
+import { EVENING_RATING_KEYS, MORNING_RATING_KEYS } from '../types';
 import type { EveningCheckin, MorningCheckin, Rating, RatingKey } from '../types';
 
-describe('eveningRatingsFromDraft', () => {
+describe('ratingsFromDraft', () => {
   it('carries every evening rating key through', () => {
     for (const key of EVENING_RATING_KEYS) {
       const ratings: Partial<Record<RatingKey, Rating>> = {};
       ratings[key] = 3;
-      expect(eveningRatingsFromDraft(ratings)[key]).toBe(3);
+      expect(ratingsFromDraft(EVENING_RATING_KEYS, ratings)[key]).toBe(3);
     }
   });
 
-  it('omits undefined keys and ignores morning-only keys', () => {
+  it('omits undefined keys and ignores keys outside the given list', () => {
     const ratings: Partial<Record<RatingKey, Rating>> = { sleepQuality: 5, mood: 4 };
-    const out = eveningRatingsFromDraft(ratings);
+    const out = ratingsFromDraft(EVENING_RATING_KEYS, ratings);
     expect(out).toEqual({ mood: 4 });
     expect(Object.keys(out)).toEqual(['mood']);
+  });
+
+  it('carries every morning rating key through', () => {
+    const ratings: Partial<Record<RatingKey, Rating>> = { sleepQuality: 5, wakingMood: 2 };
+    expect(ratingsFromDraft(MORNING_RATING_KEYS, ratings)).toEqual({
+      sleepQuality: 5,
+      wakingMood: 2,
+    });
   });
 });
 
@@ -32,7 +35,7 @@ describe('draft <-> checkin conversion', () => {
       const ratings: Partial<Record<RatingKey, Rating>> = {};
       ratings[key] = 4;
       const checkin: EveningCheckin = {
-        ...eveningRatingsFromDraft(ratings),
+        ratings: ratingsFromDraft(EVENING_RATING_KEYS, ratings),
         sideEffects: [],
         completedAt: isoTimestampNow(),
       };
@@ -42,7 +45,7 @@ describe('draft <-> checkin conversion', () => {
 
   it('draftFromEvening keeps side effects and notes', () => {
     const checkin: EveningCheckin = {
-      mood: 3,
+      ratings: { mood: 3 },
       sideEffects: ['nausea'] as const,
       notes: 'rough afternoon',
       completedAt: isoTimestampNow(),
@@ -55,9 +58,8 @@ describe('draft <-> checkin conversion', () => {
 
   it('draftFromMorning reads ratings, dose, and hours', () => {
     const checkin: MorningCheckin = {
+      ratings: { sleepQuality: 4, wakingMood: 2 },
       doseTaken: true,
-      sleepQuality: 4,
-      wakingMood: 2,
       sleepHours: 6,
       completedAt: isoTimestampNow(),
     };
