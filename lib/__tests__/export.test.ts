@@ -40,9 +40,10 @@ describe('averageOf', () => {
 
 describe('rowsInRange', () => {
   it('fills gaps with an empty entry for the missing date', () => {
-    const entries = { [DAY_1]: morningRow(DAY_1, 5) };
+    const day1Row = morningRow(DAY_1, 5);
+    const entries = { [DAY_1]: day1Row };
     const rows = rowsInRange(entries, [DAY_1, DAY_2]);
-    expect(rows).toEqual([morningRow(DAY_1, 5), { date: DAY_2 }]);
+    expect(rows).toEqual([day1Row, { date: DAY_2 }]);
   });
 });
 
