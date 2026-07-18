@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Button } from '../components/Button';
+import { DoseInput } from '../components/DoseInput';
 import { Stepper } from '../components/Stepper';
 import { Toggle } from '../components/Toggle';
 import { requestNotificationPermissions, scheduleReminders } from '../lib/notifications';
@@ -15,8 +16,6 @@ import {
 } from '../lib/storage';
 import { radius, space, typography, useTheme } from '../lib/theme';
 import type { DoseUnit, Profile } from '../lib/types';
-
-const DOSE_UNITS: readonly DoseUnit[] = ['mg', 'mcg', 'mL'];
 
 export default function Onboarding() {
   const theme = useTheme();
@@ -91,42 +90,13 @@ export default function Onboarding() {
       />
 
       <Text style={[typography.bodyStrong, styles.label, { color: theme.text }]}>Current dose</Text>
-      <View style={styles.doseRow}>
-        <TextInput
-          value={amountText}
-          onChangeText={setAmountText}
-          placeholder="Amount"
-          placeholderTextColor={theme.textMuted}
-          keyboardType="decimal-pad"
-          style={[
-            typography.body,
-            styles.input,
-            styles.amountInput,
-            { color: theme.text, backgroundColor: theme.surfaceMuted },
-          ]}
+      <View style={styles.doseField}>
+        <DoseInput
+          amount={amountText}
+          unit={unit}
+          onAmountChange={setAmountText}
+          onUnitChange={setUnit}
         />
-        <View style={styles.unitRow}>
-          {DOSE_UNITS.map((option) => {
-            const active = option === unit;
-            return (
-              <Pressable
-                key={option}
-                accessibilityRole="button"
-                onPress={() => {
-                  setUnit(option);
-                }}
-                style={[
-                  styles.unitChip,
-                  { backgroundColor: active ? theme.accentSoft : theme.surfaceMuted },
-                ]}
-              >
-                <Text style={[typography.body, { color: active ? theme.accent : theme.text }]}>
-                  {option}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
       </View>
 
       <Stepper
@@ -197,24 +167,8 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
     marginBottom: space.xl,
   },
-  doseRow: {
-    flexDirection: 'row',
-    gap: space.md,
-    alignItems: 'flex-start',
-  },
-  amountInput: {
-    flex: 1,
-  },
-  unitRow: {
-    flexDirection: 'row',
-    gap: space.sm,
-  },
-  unitChip: {
-    paddingHorizontal: space.md,
-    paddingVertical: space.md,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
+  doseField: {
+    marginBottom: space.xl,
   },
   error: {
     marginBottom: space.md,
