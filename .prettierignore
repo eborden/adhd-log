@@ -1,0 +1,9 @@
+node_modules
+.expo
+dist
+web-build
+coverage
+package-lock.json
+
+# permanent historical record — never reformatted
+docs/PLANNING-v0.md
