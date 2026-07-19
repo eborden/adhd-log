@@ -314,8 +314,8 @@ describe('bucketByWeek', () => {
   it('splits display rows into 7-day calendar buckets with labels and per-metric averages', () => {
     const weeks = bucketByWeek(eveningDays('2026-07-01' as IsoDate, 10, 3));
     expect(weeks).toHaveLength(2);
-    expect(weeks[0]?.label).toBe('Week 1 (Jul 1–Jul 7)');
-    expect(weeks[1]?.label).toBe('Week 2 (Jul 8–Jul 10)');
+    expect(weeks[0]?.label).toBe('Week 1');
+    expect(weeks[1]?.label).toBe('Week 2');
     expect(weeks[0]?.evening.get('mood')).toEqual({ kind: 'value', mean: 3, n: 7 });
     // a metric never logged in the bucket is explicitly empty, not a zero or a NaN
     expect(weeks[0]?.evening.get('libido')).toEqual({ kind: 'empty' });
@@ -558,10 +558,33 @@ describe('buildReportHtml', () => {
     expect(html).not.toContain('[object Object]');
   });
 
-  it('omits weekly buckets beyond the cap but still renders dose-period averages', () => {
+  it('renders weekly averages even for a long range, alongside dose-period averages', () => {
     const html = htmlFromRows(null, [], eveningDays('2026-05-01' as IsoDate, 60, 3));
-    expect(html).not.toContain('Weekly averages');
+    expect(html).toContain('Weekly averages');
     expect(html).toContain('Dose-period averages');
+  });
+
+  it('uses bare "Week N" weekly headers without a date range', () => {
+    const html = htmlFromRows(null, [], eveningDays('2026-05-01' as IsoDate, 14, 3));
+    expect(html).toContain('>Week 1<');
+    expect(html).not.toContain('Week 1 ('); // no "(May 1–May 7)" date range
+  });
+
+  it('keeps weekly headers upright at 5 weeks or fewer', () => {
+    const html = htmlFromRows(null, [], eveningDays('2026-05-01' as IsoDate, 35, 3)); // 5 weeks
+    expect(html).toContain('Weekly averages');
+    expect(html).not.toContain('class="vhead"');
+  });
+
+  it('switches weekly headers to vertical writing-mode past 5 weeks', () => {
+    const html = htmlFromRows(null, [], eveningDays('2026-05-01' as IsoDate, 42, 3)); // 6 weeks
+    expect(html).toContain('<th class="vhead">Week 6</th>');
+    expect(html).toContain('writing-mode: vertical-lr');
+  });
+
+  it('keeps sparklines on one line', () => {
+    const html = htmlFromRows(null, [], eveningDays('2026-05-01' as IsoDate, 10, 3));
+    expect(html).toContain('class="spark-line"');
   });
 
   it('renders a before/after table with a change arrow for a dose change inside the range', () => {

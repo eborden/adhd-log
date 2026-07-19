@@ -3,6 +3,34 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Wider report tables: unbroken sparklines, de-dated + vertical weekly headers (2026-07-19)
+
+**Problem:** Three coupled layout faults in the report tables. (1) The trend sparklines — inline
+`<span>` bars — wrapped onto multiple lines in a narrow column (visible in `titration-journey`'s
+weekly table). (2) The period-table headers were wide (`Week 1 (Jul 1–7)`) while the data was a
+single number, and a long range produced many such columns. (3) Weekly averages were dropped past
+a 56-day cap (`MAX_WEEKLY_BUCKET_DAYS`), which discarded the richest view exactly when a long
+titration needs it (`long-multimonth`).
+
+**Decision:**
+
+- **Unbroken sparklines.** `sparklineHtml` wraps its bars in a `.spark-line`
+  (`display: inline-block; white-space: nowrap`) so they can never break across lines, with more
+  compact bars (2px, no gap) so a long-range sparkline doesn't dominate the width.
+- **De-dated weekly headers, vertical past 5 weeks.** Weekly bucket labels are now bare `Week N`
+  (the date range is dropped to keep the column narrow). `periodTableHtml` takes a `verticalHeaders`
+  flag; the weekly table sets it once there are more than 5 weeks, switching those headers to
+  `writing-mode: vertical-lr` (`th.vhead`) so a many-week table stays within the page width. Other
+  headers (daily log, dose-period, Metric/Trend) stay plain and upright.
+- **Weekly always renders.** Removed the 56-day cap and `MAX_WEEKLY_BUCKET_DAYS`, so the weekly view
+  is no longer discarded for long ranges.
+
+An earlier attempt drew all these headers on a 45° `transform` angle. It was abandoned: a transform
+reserves no layout space, so the diagonal labels either ballooned the columns to the full label
+width or spilled outside the table and clipped at the page edge. Bare `Week N` + a vertical fallback
+solves the width problem without leaving the table box. Verified by rendering the goldens in a
+browser. No persisted-shape change; golden scenario reports were regenerated and tests updated.
+
 ## Print-color-adjust for report sparklines (2026-07-19)
 
 **Problem:** When the report was printed / exported to PDF, the trend sparklines disappeared. They

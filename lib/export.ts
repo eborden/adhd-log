@@ -109,10 +109,6 @@ const TREND_DEADBAND = 0.3;
 // confident-looking arrow.
 const MIN_HALF_SAMPLES = 3;
 
-// Beyond this range length, weekly buckets are omitted and only dose-period buckets render,
-// keeping a long PDF scannable.
-const MAX_WEEKLY_BUCKET_DAYS = 56;
-
 /** The single adapter from a legacy `number | null` mean to the canonical union. */
 export function toMetricAverage(mean: number | null, n: number): MetricAverage {
   return mean === null || n === 0 ? { kind: 'empty' } : { kind: 'value', mean, n };
@@ -213,7 +209,9 @@ export function bucketByWeek(rows: readonly DayEntry[]): readonly PeriodBucket[]
     const first = chunk[0];
     const last = chunk[chunk.length - 1];
     if (first === undefined || last === undefined) continue;
-    const label = `Week ${String(i / 7 + 1)} (${shortDate(first.date)}–${shortDate(last.date)})`;
+    // Bare "Week N" — the date range is dropped to keep these headers narrow, since a long range
+    // can produce many weekly columns.
+    const label = `Week ${String(i / 7 + 1)}`;
     buckets.push(makeBucket(label, first.date, last.date, chunk));
   }
   return buckets;
@@ -552,24 +550,30 @@ function ratingHexFor(rating: Rating, direction: ScaleDirection): string {
 
 /** Inline `<span>` bar sparkline — same height formula as `trends.tsx`, no charting dependency. */
 function sparklineHtml(values: readonly (Rating | undefined)[], direction: ScaleDirection): string {
-  return values
+  const bars = values
     .map((value) => {
       const height = value === undefined ? 4 : 8 + value * 8;
       const bg = value === undefined ? palette.warm300 : ratingHexFor(value, direction);
-      return `<span class="spark" style="display:inline-block;width:4px;height:${String(height)}px;background:${bg};vertical-align:bottom;margin-right:1px"></span>`;
+      return `<span class="spark" style="display:inline-block;width:2px;height:${String(height)}px;background:${bg};vertical-align:bottom"></span>`;
     })
     .join('');
+  // Wrap the bars in a nowrap inline-block so a narrow column can never break the sparkline across
+  // lines. Bars are compact (2px, no gap) to keep long-range sparklines from dominating the width.
+  return `<span class="spark-line">${bars}</span>`;
 }
 
 /**
  * A compact per-period averages table: one row per metric that has any data in range, a full-range
  * sparkline, then one mean column per bucket ('—' for an empty bucket). Returns '' when there are
- * no buckets or no metric with data.
+ * no buckets or no metric with data. When `verticalHeaders` is set, the bucket headers switch to
+ * vertical (writing-mode) text — used by the weekly table once there are enough weeks that upright
+ * headers would stretch it too wide.
  */
 function periodTableHtml(
   title: string,
   buckets: readonly PeriodBucket[],
   rows: readonly DayEntry[],
+  verticalHeaders = false,
 ): string {
   if (buckets.length === 0) return '';
   const metricRows = REPORT_RATING_ORDER.flatMap((key) => {
@@ -595,7 +599,10 @@ function periodTableHtml(
     ];
   });
   if (metricRows.length === 0) return '';
-  const headers = buckets.map((bucket) => `<th>${escapeHtml(bucket.label)}</th>`).join('');
+  const headerClass = verticalHeaders ? ' class="vhead"' : '';
+  const headers = buckets
+    .map((bucket) => `<th${headerClass}>${escapeHtml(bucket.label)}</th>`)
+    .join('');
   return `<h2>${escapeHtml(title)}</h2>
      <table>
        <tr><th>Metric</th><th>Trend</th>${headers}</tr>
@@ -793,11 +800,15 @@ export function buildReportHtml(
 
   // Per-period averages replace the single grand mean, which flattened the titration story.
   // Weekly buckets are the natural cadence; dose-period buckets are what a titrating provider
-  // reasons from. Weekly buckets are dropped beyond MAX_WEEKLY_BUCKET_DAYS to keep the PDF scannable.
-  const weeklySection =
-    rows.length > MAX_WEEKLY_BUCKET_DAYS
-      ? ''
-      : periodTableHtml('Weekly averages', bucketByWeek(rows), rows);
+  // reasons from. Weekly always renders (dropping it discarded the richest view for long ranges);
+  // past 5 weeks its headers go vertical so a many-week table stays within the page width.
+  const weeklyBuckets = bucketByWeek(rows);
+  const weeklySection = periodTableHtml(
+    'Weekly averages',
+    weeklyBuckets,
+    rows,
+    weeklyBuckets.length > 5,
+  );
   const dosePeriodSection = periodTableHtml(
     'Dose-period averages',
     bucketByDosePeriod(entries, doses, rangeStart, rangeEnd),
@@ -924,6 +935,9 @@ export function buildReportHtml(
          just those to print. The page background is deliberately NOT forced, and is dropped entirely
          when printing, so a PDF export doesn't flood the page with ink. */
       .spark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .spark-line { display: inline-block; white-space: nowrap; }
+      /* Weekly headers go vertical past 5 weeks so a many-week table stays within the page width. */
+      th.vhead { writing-mode: vertical-lr; white-space: nowrap; vertical-align: bottom; }
       @media print {
         body { background: transparent; }
       }
@@ -940,7 +954,7 @@ export function buildReportHtml(
       ${sideEffectsSection}
       ${notesSection}
       <h2>Daily log</h2>
-      <table>
+      <table class="grid">
         ${dailyHeader}
         ${dailyRows}
       </table>
