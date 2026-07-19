@@ -913,6 +913,9 @@ export function buildReportHtml(
   return `<html>
     <head><meta charset="utf-8" />
     <style>
+      /* Force background colors to survive printing/PDF — the trend sparklines are background-filled
+         bars, which print engines drop by default. */
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       body { font-family: -apple-system, sans-serif; padding: 24px; color: ${palette.warm900}; background: ${palette.warm50}; }
       table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
       th, td { border: 1px solid ${palette.warm300}; padding: 6px 10px; text-align: left; font-size: 13px; }

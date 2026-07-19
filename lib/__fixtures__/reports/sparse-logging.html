@@ -1,6 +1,9 @@
 <html>
     <head><meta charset="utf-8" />
     <style>
+      /* Force background colors to survive printing/PDF — the trend sparklines are background-filled
+         bars, which print engines drop by default. */
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       body { font-family: -apple-system, sans-serif; padding: 24px; color: #2A251E; background: #F4EFE5; }
       table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
       th, td { border: 1px solid #D4CBB9; padding: 6px 10px; text-align: left; font-size: 13px; }

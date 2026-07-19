@@ -402,6 +402,12 @@ describe('buildReportHtml', () => {
     expect(html).toContain('titrating up');
   });
 
+  it('forces background colors to print so the sparklines survive PDF export', () => {
+    const html = htmlFromRows(null, [], [morningRow(DAY_1, 3)]);
+    expect(html).toContain('print-color-adjust: exact');
+    expect(html).toContain('-webkit-print-color-adjust: exact');
+  });
+
   it('lists side effects with severity for a day that logged any', () => {
     const rowWithSideEffects: DayEntry = {
       date: DAY_1,

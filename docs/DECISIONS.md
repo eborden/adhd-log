@@ -3,6 +3,17 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Print-color-adjust for report sparklines (2026-07-19)
+
+**Problem:** When the report was printed / exported to PDF, the trend sparklines disappeared. They
+are background-filled `<span>` bars (`background:${hex}`, no content), and print engines drop
+background colors by default — so the bars rendered at full size but empty.
+
+**Decision:** Added a universal `* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }`
+rule to the report's `<style>` block, forcing background fills to survive printing/PDF across the
+WebKit/Chromium engines `expo-print` uses. One line, no structural change; the golden scenario
+reports were regenerated and a guard test asserts the rule is emitted.
+
 ## Schema-driven daily log (2026-07-19)
 
 **Problem:** The report's daily-log table hard-coded six columns (Date, Sleep, Waking mood, Mood,
