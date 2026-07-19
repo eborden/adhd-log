@@ -7,12 +7,17 @@ frozen. Newest first.
 
 **Problem:** When the report was printed / exported to PDF, the trend sparklines disappeared. They
 are background-filled `<span>` bars (`background:${hex}`, no content), and print engines drop
-background colors by default — so the bars rendered at full size but empty.
+background colors by default — so the bars rendered at full size but empty. But forcing _all_
+backgrounds to print (a universal `print-color-adjust: exact`) is the wrong fix: it also prints the
+warm page background, flooding a PDF export with ink.
 
-**Decision:** Added a universal `* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }`
-rule to the report's `<style>` block, forcing background fills to survive printing/PDF across the
-WebKit/Chromium engines `expo-print` uses. One line, no structural change; the golden scenario
-reports were regenerated and a guard test asserts the rule is emitted.
+**Decision:** Scope the fix. The sparkline bars carry a `.spark` class, and only that class gets
+`-webkit-print-color-adjust: exact; print-color-adjust: exact;` — so the bars survive PDF export
+while every other background stays in the engine's default (ink-economy) mode. The page background
+is additionally dropped under `@media print { body { background: transparent } }`, so a printed copy
+is white regardless of the viewer's "background graphics" setting. The warm on-screen look is
+unchanged. Golden scenario reports were regenerated; a guard test asserts both the scoped rule and
+the dropped page background.
 
 ## Schema-driven daily log (2026-07-19)
 

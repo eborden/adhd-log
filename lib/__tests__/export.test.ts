@@ -402,10 +402,16 @@ describe('buildReportHtml', () => {
     expect(html).toContain('titrating up');
   });
 
-  it('forces background colors to print so the sparklines survive PDF export', () => {
-    const html = htmlFromRows(null, [], [morningRow(DAY_1, 3)]);
-    expect(html).toContain('print-color-adjust: exact');
-    expect(html).toContain('-webkit-print-color-adjust: exact');
+  it('forces only the sparkline bars to print, and drops the page background', () => {
+    const html = htmlFromRows(null, [], eveningDays(DAY_1, 3, 3));
+    // Sparkline bars carry the class the print-color-adjust rule targets.
+    expect(html).toContain('class="spark"');
+    expect(html).toContain(
+      '.spark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
+    );
+    // Page background is dropped when printing, so a PDF export doesn't flood the page with ink.
+    expect(html).toContain('@media print');
+    expect(html).toContain('body { background: transparent; }');
   });
 
   it('lists side effects with severity for a day that logged any', () => {

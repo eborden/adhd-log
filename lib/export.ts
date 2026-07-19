@@ -556,7 +556,7 @@ function sparklineHtml(values: readonly (Rating | undefined)[], direction: Scale
     .map((value) => {
       const height = value === undefined ? 4 : 8 + value * 8;
       const bg = value === undefined ? palette.warm300 : ratingHexFor(value, direction);
-      return `<span style="display:inline-block;width:4px;height:${String(height)}px;background:${bg};vertical-align:bottom;margin-right:1px"></span>`;
+      return `<span class="spark" style="display:inline-block;width:4px;height:${String(height)}px;background:${bg};vertical-align:bottom;margin-right:1px"></span>`;
     })
     .join('');
 }
@@ -913,9 +913,6 @@ export function buildReportHtml(
   return `<html>
     <head><meta charset="utf-8" />
     <style>
-      /* Force background colors to survive printing/PDF — the trend sparklines are background-filled
-         bars, which print engines drop by default. */
-      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       body { font-family: -apple-system, sans-serif; padding: 24px; color: ${palette.warm900}; background: ${palette.warm50}; }
       table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
       th, td { border: 1px solid ${palette.warm300}; padding: 6px 10px; text-align: left; font-size: 13px; }
@@ -923,6 +920,13 @@ export function buildReportHtml(
       h2 { margin-top: 24px; color: ${palette.pineStrong}; }
       p { color: ${palette.warm500}; }
       .muted { color: ${palette.warm500}; font-size: 12px; }
+      /* The trend sparklines are background-filled bars, which print engines drop by default; force
+         just those to print. The page background is deliberately NOT forced, and is dropped entirely
+         when printing, so a PDF export doesn't flood the page with ink. */
+      .spark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      @media print {
+        body { background: transparent; }
+      }
     </style>
     </head>
     <body>
