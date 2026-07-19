@@ -538,14 +538,19 @@ function scaleAnchorCaption(metric: ScaleMetric): string {
   return `1 = ${metric.low}, 5 = ${metric.high}`;
 }
 
-/** Same green/clay/ochre rating hues `ratingColor` uses, from the light-theme palette (no new hex). */
-function ratingHexFor(rating: Rating, direction: ScaleDirection): string {
-  if (direction === 'neutral') return palette.ochreStrong;
-  const better = direction === 'higher-better' ? rating >= 4 : rating <= 2;
-  const worse = direction === 'higher-better' ? rating <= 2 : rating >= 4;
-  if (better) return palette.greenStrong;
-  if (worse) return palette.clayStrong;
-  return palette.ochreStrong;
+/**
+ * The sparkline bar color class for a value — same green/clay/ochre logic as `ratingColor`, but
+ * as a class so the hues live in the stylesheet (see `.spark-*`) rather than inline. Only the
+ * per-bar height stays inline, since it is the one truly per-datum value.
+ */
+function sparkBarClass(value: Rating | undefined, direction: ScaleDirection): string {
+  if (value === undefined) return 'spark-none';
+  if (direction === 'neutral') return 'spark-mid';
+  const better = direction === 'higher-better' ? value >= 4 : value <= 2;
+  const worse = direction === 'higher-better' ? value <= 2 : value >= 4;
+  if (better) return 'spark-good';
+  if (worse) return 'spark-bad';
+  return 'spark-mid';
 }
 
 /** Inline `<span>` bar sparkline — same height formula as `trends.tsx`, no charting dependency. */
@@ -553,8 +558,7 @@ function sparklineHtml(values: readonly (Rating | undefined)[], direction: Scale
   const bars = values
     .map((value) => {
       const height = value === undefined ? 4 : 8 + value * 8;
-      const bg = value === undefined ? palette.warm300 : ratingHexFor(value, direction);
-      return `<span class="spark" style="display:inline-block;width:2px;height:${String(height)}px;background:${bg};vertical-align:bottom"></span>`;
+      return `<span class="spark ${sparkBarClass(value, direction)}" style="height:${String(height)}px"></span>`;
     })
     .join('');
   // Wrap the bars in a nowrap inline-block so a narrow column can never break the sparkline across
@@ -934,7 +938,11 @@ export function buildReportHtml(
       /* The trend sparklines are background-filled bars, which print engines drop by default; force
          just those to print. The page background is deliberately NOT forced, and is dropped entirely
          when printing, so a PDF export doesn't flood the page with ink. */
-      .spark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .spark { display: inline-block; width: 2px; vertical-align: bottom; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .spark-good { background: ${palette.greenStrong}; }
+      .spark-mid { background: ${palette.ochreStrong}; }
+      .spark-bad { background: ${palette.clayStrong}; }
+      .spark-none { background: ${palette.warm300}; }
       .spark-line { display: inline-block; white-space: nowrap; }
       /* Weekly headers go vertical past 5 weeks so a many-week table stays within the page width. */
       th.vhead { writing-mode: vertical-lr; white-space: nowrap; vertical-align: bottom; }

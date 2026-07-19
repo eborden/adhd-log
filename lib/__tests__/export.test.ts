@@ -27,6 +27,7 @@ import {
   type ReportOptions,
 } from '../export';
 import { addDays, isoTimestampNow } from '../storage';
+import { palette } from '../tokens';
 import type { DayEntry, DoseChange, IsoDate, Metric, Profile, Rating, SideEffect } from '../types';
 
 const NO_ONSET = new Map<SideEffect, IsoDate>();
@@ -404,11 +405,9 @@ describe('buildReportHtml', () => {
 
   it('forces only the sparkline bars to print, and drops the page background', () => {
     const html = htmlFromRows(null, [], eveningDays(DAY_1, 3, 3));
-    // Sparkline bars carry the class the print-color-adjust rule targets.
-    expect(html).toContain('class="spark"');
-    expect(html).toContain(
-      '.spark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
-    );
+    // Sparkline bars carry the .spark class the print-color-adjust rule targets.
+    expect(html).toContain('class="spark ');
+    expect(html).toContain('print-color-adjust: exact;');
     // Page background is dropped when printing, so a PDF export doesn't flood the page with ink.
     expect(html).toContain('@media print');
     expect(html).toContain('body { background: transparent; }');
@@ -551,10 +550,10 @@ describe('buildReportHtml', () => {
     expect(html).toContain('first half 3.0 → second half 3.0');
   });
 
-  it('renders sparkline bars with a concrete hex background, never [object Object]', () => {
+  it('renders sparkline bars with only the height inline and the color as a class', () => {
     const html = htmlFromRows(null, [], eveningDays('2026-07-01' as IsoDate, 4, 5));
-    expect(html).toContain('height:48px'); // 8 + 5*8
-    expect(html).toContain('background:#2F8455'); // mood 5, higher-better → the green rating hue
+    expect(html).toContain('class="spark spark-good" style="height:48px"'); // mood 5, higher-better → green
+    expect(html).toContain(`.spark-good { background: ${palette.greenStrong}; }`); // hue lives in CSS
     expect(html).not.toContain('[object Object]');
   });
 
