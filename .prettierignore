@@ -5,5 +5,8 @@ web-build
 coverage
 package-lock.json
 
+# generated golden report outputs — pinned by scenarios.test.ts, not hand-formatted
+lib/__fixtures__/reports
+
 # permanent historical record — never reformatted
 docs/PLANNING-v0.md

@@ -50,6 +50,7 @@
     "web": "expo start --web",
     "apk": "node scripts/build-apk.mjs",
     "apk:clean": "node scripts/build-apk.mjs --clean",
+    "reports": "vitest run lib/__tests__/scenarios.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",

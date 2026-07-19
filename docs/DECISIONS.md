@@ -3,6 +3,37 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Golden provider-report scenarios (2026-07-19)
+
+**Problem:** The provider report (`buildReportHtml`) is the app's whole reason to exist, but its
+growing surface — cover trend arrows, weekly + dose-period averages, before/after tables,
+adherence, side-effect severity runs, notes — could only be eyeballed by hand-feeding ad-hoc data
+through a test. There was no reproducible, realistic dataset to develop against, review the
+rendered output from, or regression-check.
+
+**Decision:** Added `lib/__fixtures__/scenarios.ts` — 10 hand-authored, deterministic
+`ReportScenario`s (RN-free, type-only imports plus a local pure `addDays`; branded values via `as`;
+one frozen `FIXED_TS` so both the HTML and the exported backup JSON are byte-reproducible). Values
+are clinically grounded (FDA-label titration schedules, the slow non-stimulant onset that _lags_
+each dose increase, and per-drug side-effect fingerprints for atomoxetine / guanfacine ER /
+viloxazine ER) — realistic sample data, not medical advice. The linked open datasets (Kaggle ADHD
+diagnosis, ADHD-200, med-adhd.org, an animoller PDF template) held no importable daily self-report
+series, so the data stays authored rather than mined.
+
+The set spans responder / partial / non-responder, single- vs multi-dose titration, sparse and
+poor-adherence logging, a 7-day export and a >56-day one, notes on/off, and profile / null-header
+cases, so every report branch is exercised: up/down/flat/insufficient trend arrows, the 56-day
+weekly-bucket cutoff, the multi-dose caveat, single and multiple before/after tables, the
+adherence split, side-effect run-length trajectories, and the migrated-default footnote.
+
+`lib/__tests__/scenarios.test.ts` renders each scenario via `buildReportHtml` and pins both the
+HTML and a `Backup`-shaped JSON with `toMatchFileSnapshot`, plus a gallery `index.html`; the
+committed golden outputs under `lib/__fixtures__/reports/` (prettier-ignored) double as the
+human-reviewable sample reports and a drift guard. `npm run reports` regenerates them (`-u` to
+accept changes). No change to `export.ts` or any persisted shape — a pure read/derive addition; the
+backup JSON also imports straight into the app as realistic seed data. Does not consume a
+`docs/pending/` number (test/tooling infrastructure, not a design-doc-track feature).
+
 ## Provider report overhaul (2026-07-18)
 
 **Problem:** The PDF report is the app's whole reason to exist — the one artifact that leaves

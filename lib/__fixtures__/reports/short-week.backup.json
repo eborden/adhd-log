@@ -1,0 +1,183 @@
+{
+  "exportedAt": "2026-07-19T12:00:00.000Z",
+  "profile": {
+    "medName": "Guanfacine ER",
+    "startDate": "2026-06-01",
+    "currentDose": {
+      "amount": 3,
+      "unit": "mg"
+    },
+    "morningReminder": {
+      "hour": 8,
+      "minute": 0
+    },
+    "eveningReminder": {
+      "hour": 20,
+      "minute": 30
+    },
+    "lockEnabled": true,
+    "createdAt": "2026-07-19T12:00:00.000Z"
+  },
+  "doses": [
+    {
+      "date": "2026-06-01",
+      "dose": {
+        "amount": 3,
+        "unit": "mg"
+      }
+    }
+  ],
+  "entries": {
+    "2026-07-06": {
+      "date": "2026-07-06",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z",
+        "sleepHours": 8
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 4,
+          "energy": 4,
+          "anxiety": 2
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z",
+        "notes": "Good day at work, stayed on task through the afternoon."
+      }
+    },
+    "2026-07-07": {
+      "date": "2026-07-07",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 3
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 3,
+          "energy": 4,
+          "anxiety": 2
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-07-08": {
+      "date": "2026-07-08",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 4,
+          "energy": 4,
+          "anxiety": 2
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-07-09": {
+      "date": "2026-07-09",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 3,
+          "focus": 4,
+          "energy": 3,
+          "anxiety": 3
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z",
+        "notes": "Bit drowsy mid-morning, wore off by lunch."
+      }
+    },
+    "2026-07-10": {
+      "date": "2026-07-10",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z",
+        "sleepHours": 9
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 4,
+          "energy": 4,
+          "anxiety": 2
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-07-11": {
+      "date": "2026-07-11",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 5,
+          "focus": 4,
+          "energy": 4,
+          "anxiety": 2
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-07-12": {
+      "date": "2026-07-12",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 5
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 5,
+          "energy": 4,
+          "anxiety": 1
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    }
+  }
+}

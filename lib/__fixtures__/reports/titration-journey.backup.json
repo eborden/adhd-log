@@ -1,0 +1,533 @@
+{
+  "exportedAt": "2026-07-19T12:00:00.000Z",
+  "profile": {
+    "medName": "Guanfacine ER",
+    "startDate": "2026-03-02",
+    "currentDose": {
+      "amount": 3,
+      "unit": "mg"
+    },
+    "morningReminder": {
+      "hour": 8,
+      "minute": 0
+    },
+    "eveningReminder": {
+      "hour": 20,
+      "minute": 30
+    },
+    "lockEnabled": true,
+    "enabledEveningMetrics": [
+      "mood",
+      "focus",
+      "impulsivity",
+      "anxiety",
+      "energy"
+    ],
+    "createdAt": "2026-07-19T12:00:00.000Z"
+  },
+  "doses": [
+    {
+      "date": "2026-03-02",
+      "dose": {
+        "amount": 1,
+        "unit": "mg"
+      }
+    },
+    {
+      "date": "2026-03-16",
+      "dose": {
+        "amount": 2,
+        "unit": "mg"
+      },
+      "note": "up to 2mg"
+    },
+    {
+      "date": "2026-03-30",
+      "dose": {
+        "amount": 3,
+        "unit": "mg"
+      },
+      "note": "up to 3mg"
+    }
+  ],
+  "entries": {
+    "2026-03-02": {
+      "date": "2026-03-02",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 3,
+          "wakingMood": 3
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 3,
+          "focus": 2,
+          "impulsivity": 4,
+          "anxiety": 4,
+          "energy": 3
+        },
+        "sideEffects": {
+          "insomnia": {
+            "severity": "mild"
+          }
+        },
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-04": {
+      "date": "2026-03-04",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 3,
+          "wakingMood": 2
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 3,
+          "focus": 2,
+          "impulsivity": 4,
+          "anxiety": 4,
+          "energy": 2
+        },
+        "sideEffects": {
+          "dizziness": {
+            "severity": "mild"
+          }
+        },
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-06": {
+      "date": "2026-03-06",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 2
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 3,
+          "focus": 3,
+          "impulsivity": 4,
+          "anxiety": 3,
+          "energy": 2
+        },
+        "sideEffects": {
+          "dizziness": {
+            "severity": "mild"
+          }
+        },
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-08": {
+      "date": "2026-03-08",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 3
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 3,
+          "focus": 3,
+          "impulsivity": 3,
+          "anxiety": 3,
+          "energy": 2
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-10": {
+      "date": "2026-03-10",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 3
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 3,
+          "focus": 3,
+          "impulsivity": 4,
+          "anxiety": 3,
+          "energy": 3
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-12": {
+      "date": "2026-03-12",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 3
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 3,
+          "focus": 3,
+          "impulsivity": 3,
+          "anxiety": 3,
+          "energy": 3
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-14": {
+      "date": "2026-03-14",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 3
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 3,
+          "impulsivity": 3,
+          "anxiety": 2,
+          "energy": 3
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-16": {
+      "date": "2026-03-16",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 3
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 3,
+          "focus": 3,
+          "impulsivity": 3,
+          "anxiety": 3,
+          "energy": 2
+        },
+        "sideEffects": {
+          "dizziness": {
+            "severity": "mild"
+          }
+        },
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-18": {
+      "date": "2026-03-18",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 3
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 3,
+          "impulsivity": 3,
+          "anxiety": 2,
+          "energy": 3
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-20": {
+      "date": "2026-03-20",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 4,
+          "impulsivity": 3,
+          "anxiety": 2,
+          "energy": 3
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-22": {
+      "date": "2026-03-22",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 4,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 4,
+          "impulsivity": 2,
+          "anxiety": 2,
+          "energy": 3
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-24": {
+      "date": "2026-03-24",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 4,
+          "impulsivity": 3,
+          "anxiety": 2,
+          "energy": 4
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-26": {
+      "date": "2026-03-26",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 4,
+          "impulsivity": 2,
+          "anxiety": 2,
+          "energy": 4
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-28": {
+      "date": "2026-03-28",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 4,
+          "impulsivity": 2,
+          "anxiety": 2,
+          "energy": 4
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-03-30": {
+      "date": "2026-03-30",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 4,
+          "impulsivity": 2,
+          "anxiety": 2,
+          "energy": 3
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-04-01": {
+      "date": "2026-04-01",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 5,
+          "focus": 5,
+          "impulsivity": 2,
+          "anxiety": 2,
+          "energy": 4
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-04-03": {
+      "date": "2026-04-03",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 5
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 4,
+          "focus": 5,
+          "impulsivity": 2,
+          "anxiety": 1,
+          "energy": 4
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-04-05": {
+      "date": "2026-04-05",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 4
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 5,
+          "focus": 5,
+          "impulsivity": 1,
+          "anxiety": 2,
+          "energy": 4
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-04-07": {
+      "date": "2026-04-07",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 5
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 5,
+          "focus": 4,
+          "impulsivity": 2,
+          "anxiety": 1,
+          "energy": 5
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-04-09": {
+      "date": "2026-04-09",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 5
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 5,
+          "focus": 5,
+          "impulsivity": 2,
+          "anxiety": 1,
+          "energy": 4
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    },
+    "2026-04-11": {
+      "date": "2026-04-11",
+      "morning": {
+        "ratings": {
+          "sleepQuality": 5,
+          "wakingMood": 5
+        },
+        "doseTaken": true,
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      },
+      "evening": {
+        "ratings": {
+          "mood": 5,
+          "focus": 5,
+          "impulsivity": 1,
+          "anxiety": 1,
+          "energy": 5
+        },
+        "sideEffects": {},
+        "completedAt": "2026-07-19T12:00:00.000Z"
+      }
+    }
+  }
+}
