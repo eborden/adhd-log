@@ -553,6 +553,20 @@ function sparkBarClass(value: Rating | undefined, direction: ScaleDirection): st
   return 'spark-mid';
 }
 
+/**
+ * The bar-width density class for a sparkline, chosen from how many weeks it spans. Wider bars
+ * read well for a short range; narrower bars keep a long range (10–20 weeks) from ballooning the
+ * Trend column. Kept as discrete classes (not an inline width) so the widths live in the
+ * stylesheet — only each bar's height is truly per-datum and stays inline.
+ */
+function sparkDensityClass(dayCount: number): string {
+  const weeks = Math.ceil(dayCount / 7);
+  if (weeks <= 2) return 'spark-w5'; // ≤ 2 weeks — chunky 5px bars
+  if (weeks <= 6) return 'spark-w3'; // ≤ 6 weeks
+  if (weeks <= 12) return 'spark-w2'; // ≤ 12 weeks
+  return 'spark-w1'; // longer — 1px bars
+}
+
 /** Inline `<span>` bar sparkline — same height formula as `trends.tsx`, no charting dependency. */
 function sparklineHtml(values: readonly (Rating | undefined)[], direction: ScaleDirection): string {
   const bars = values
@@ -561,9 +575,10 @@ function sparklineHtml(values: readonly (Rating | undefined)[], direction: Scale
       return `<span class="spark ${sparkBarClass(value, direction)}" style="height:${String(height)}px"></span>`;
     })
     .join('');
-  // Wrap the bars in a nowrap inline-block so a narrow column can never break the sparkline across
-  // lines. Bars are compact (2px, no gap) to keep long-range sparklines from dominating the width.
-  return `<span class="spark-line">${bars}</span>`;
+  // Bars sit in a nowrap row; the density class scales bar width to the range length so the
+  // sparkline stays compact for a long range and legible for a short one, without breaking the
+  // table layout.
+  return `<span class="spark-line ${sparkDensityClass(values.length)}">${bars}</span>`;
 }
 
 /**
@@ -938,12 +953,18 @@ export function buildReportHtml(
       /* The trend sparklines are background-filled bars, which print engines drop by default; force
          just those to print. The page background is deliberately NOT forced, and is dropped entirely
          when printing, so a PDF export doesn't flood the page with ink. */
-      .spark { display: inline-block; width: 2px; vertical-align: bottom; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .spark { display: inline-block; width: 3px; vertical-align: bottom; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .spark-good { background: ${palette.greenStrong}; }
       .spark-mid { background: ${palette.ochreStrong}; }
       .spark-bad { background: ${palette.clayStrong}; }
       .spark-none { background: ${palette.warm300}; }
       .spark-line { display: inline-block; white-space: nowrap; }
+      /* Bar width scales to the range length (see sparkDensityClass) so a long range stays compact
+         and a short one stays legible, without stretching the Trend column. */
+      .spark-line.spark-w5 > .spark { width: 5px; }
+      .spark-line.spark-w3 > .spark { width: 3px; }
+      .spark-line.spark-w2 > .spark { width: 2px; }
+      .spark-line.spark-w1 > .spark { width: 1px; }
       /* Weekly headers go vertical past 5 weeks so a many-week table stays within the page width. */
       th.vhead { writing-mode: vertical-lr; white-space: nowrap; vertical-align: bottom; }
       @media print {

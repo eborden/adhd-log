@@ -557,6 +557,15 @@ describe('buildReportHtml', () => {
     expect(html).not.toContain('[object Object]');
   });
 
+  it('scales sparkline bar width to the number of weeks shown', () => {
+    const oneWeek = htmlFromRows(null, [], eveningDays('2026-05-01' as IsoDate, 7, 3));
+    expect(oneWeek).toContain('class="spark-line spark-w5"'); // ≤ 2 weeks → chunky bars
+    const nineWeeks = htmlFromRows(null, [], eveningDays('2026-05-01' as IsoDate, 63, 3));
+    expect(nineWeeks).toContain('class="spark-line spark-w2"'); // ≤ 12 weeks
+    const twentyWeeks = htmlFromRows(null, [], eveningDays('2026-05-01' as IsoDate, 140, 3));
+    expect(twentyWeeks).toContain('class="spark-line spark-w1"'); // long range → 1px bars
+  });
+
   it('renders weekly averages even for a long range, alongside dose-period averages', () => {
     const html = htmlFromRows(null, [], eveningDays('2026-05-01' as IsoDate, 60, 3));
     expect(html).toContain('Weekly averages');
@@ -583,7 +592,8 @@ describe('buildReportHtml', () => {
 
   it('keeps sparklines on one line', () => {
     const html = htmlFromRows(null, [], eveningDays('2026-05-01' as IsoDate, 10, 3));
-    expect(html).toContain('class="spark-line"');
+    expect(html).toContain('class="spark-line '); // spark-line + a density class
+    expect(html).toContain('.spark-line { display: inline-block; white-space: nowrap; }');
   });
 
   it('renders a before/after table with a change arrow for a dose change inside the range', () => {
