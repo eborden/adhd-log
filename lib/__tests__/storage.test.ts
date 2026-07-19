@@ -28,6 +28,7 @@ import {
   loadDoseChanges,
   loadEntries,
   loadProfile,
+  loggedDateRange,
   parseDoseChangeList,
   parseEntries,
   parseEntriesTolerant,
@@ -340,6 +341,55 @@ describe('firstOnsetDates', () => {
 
   it('is empty for an empty log', () => {
     expect(firstOnsetDates({}).size).toBe(0);
+  });
+});
+
+describe('loggedDateRange', () => {
+  const morningEntry = (date: string): DayEntry => ({
+    date: date as IsoDate,
+    morning: {
+      ratings: {},
+      doseTaken: true,
+      completedAt: `${date}T08:00:00.000Z` as ReturnType<typeof isoTimestampNow>,
+    },
+  });
+  const eveningEntry = (date: string): DayEntry => ({
+    date: date as IsoDate,
+    evening: {
+      ratings: {},
+      sideEffects: {},
+      completedAt: `${date}T20:00:00.000Z` as ReturnType<typeof isoTimestampNow>,
+    },
+  });
+
+  it('returns null for an empty log', () => {
+    expect(loggedDateRange({})).toBeNull();
+  });
+
+  it('is a single day (start === end) when only one day is logged', () => {
+    const entries: Record<IsoDate, DayEntry> = {
+      ['2026-07-05' as IsoDate]: morningEntry('2026-07-05'),
+    };
+    expect(loggedDateRange(entries)).toEqual({ start: '2026-07-05', end: '2026-07-05' });
+  });
+
+  it('spans earliest to latest across an interior gap, regardless of insertion order', () => {
+    const entries: Record<IsoDate, DayEntry> = {
+      ['2026-07-10' as IsoDate]: eveningEntry('2026-07-10'),
+      ['2026-07-01' as IsoDate]: morningEntry('2026-07-01'),
+      // 2026-07-05 deliberately absent — a skipped day stays inside the range.
+    };
+    expect(loggedDateRange(entries)).toEqual({ start: '2026-07-01', end: '2026-07-10' });
+  });
+
+  it('counts morning-only and evening-only days but excludes gap-filled empty entries', () => {
+    const entries: Record<IsoDate, DayEntry> = {
+      ['2026-07-01' as IsoDate]: { date: '2026-07-01' as IsoDate }, // no check-in → excluded
+      ['2026-07-02' as IsoDate]: morningEntry('2026-07-02'),
+      ['2026-07-03' as IsoDate]: eveningEntry('2026-07-03'),
+      ['2026-07-09' as IsoDate]: { date: '2026-07-09' as IsoDate }, // no check-in → excluded
+    };
+    expect(loggedDateRange(entries)).toEqual({ start: '2026-07-02', end: '2026-07-03' });
   });
 });
 

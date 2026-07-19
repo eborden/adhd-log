@@ -22,23 +22,25 @@ import {
   withEveningMetricToggled,
 } from '../../lib/schema';
 import {
-  addDays,
   appendDoseChange,
+  datesInRange,
   isEveningRatingKey,
   isHour,
   loadDoseChanges,
   loadEntries,
   loadProfile,
+  loggedDateRange,
   restoreBackup,
   saveProfile,
   todayIsoDate,
 } from '../../lib/storage';
 import { radius, space, typography, useTheme } from '../../lib/theme';
-import type { DoseChange, DoseUnit, Profile } from '../../lib/types';
+import type { DayEntry, DoseChange, DoseUnit, IsoDate, Profile } from '../../lib/types';
 
 interface SettingsData {
   readonly profile: Profile | null;
   readonly doses: readonly DoseChange[];
+  readonly entries: Readonly<Record<IsoDate, DayEntry>>;
 }
 
 function SectionLabel({ children }: { readonly children: string }) {
@@ -54,12 +56,16 @@ export default function Settings() {
   const theme = useTheme();
   const { data, setData, refresh } = useFocusLoad<SettingsData>(
     async () => {
-      const [loadedProfile, loadedDoses] = await Promise.all([loadProfile(), loadDoseChanges()]);
-      return { profile: loadedProfile, doses: loadedDoses };
+      const [loadedProfile, loadedDoses, loadedEntries] = await Promise.all([
+        loadProfile(),
+        loadDoseChanges(),
+        loadEntries(),
+      ]);
+      return { profile: loadedProfile, doses: loadedDoses, entries: loadedEntries };
     },
-    { profile: null, doses: [] },
+    { profile: null, doses: [], entries: {} },
   );
-  const { profile, doses } = data;
+  const { profile, doses, entries } = data;
   const [newAmount, setNewAmount] = useState('');
   const [newUnit, setNewUnit] = useState<DoseUnit>('mg');
   const [newNote, setNewNote] = useState('');
@@ -70,6 +76,10 @@ export default function Settings() {
     return <View style={[styles.container, { backgroundColor: theme.background }]} />;
   }
   const currentProfile = profile;
+
+  // The PDF window auto-fits to logged data; surface the resulting span on the button.
+  const reportSpan = loggedDateRange(entries);
+  const reportDayCount = reportSpan ? datesInRange(reportSpan.start, reportSpan.end).length : 0;
 
   const updateProfile = (next: Profile): void => {
     setData((s) => ({ ...s, profile: next }));
@@ -112,10 +122,13 @@ export default function Settings() {
   const handleExportPdf = async (): Promise<void> => {
     setBusy(true);
     try {
-      const [entries, currentDoses] = await Promise.all([loadEntries(), loadDoseChanges()]);
       const today = todayIsoDate();
-      const rangeStart = addDays(today, -29);
-      const html = buildReportHtml(currentProfile, currentDoses, entries, rangeStart, today, {
+      // Auto-fit the window to the logged data (earliest → most recent check-in) so the report
+      // covers exactly the titration so far — no empty scaffold when short, no cut-off when long.
+      const span = loggedDateRange(entries);
+      const rangeStart = span?.start ?? today;
+      const rangeEnd = span?.end ?? today;
+      const html = buildReportHtml(currentProfile, doses, entries, rangeStart, rangeEnd, {
         ...DEFAULT_REPORT_OPTIONS,
         includeNotes,
       });
@@ -286,7 +299,11 @@ export default function Settings() {
       <Card style={[styles.section, styles.exportGroup]}>
         <Toggle label="Include notes in PDF" value={includeNotes} onChange={setIncludeNotes} />
         <Button
-          label="Export PDF report (30 days)"
+          label={
+            reportSpan
+              ? `Export PDF report (${reportDayCount.toString()} days)`
+              : 'Export PDF report'
+          }
           variant="secondary"
           disabled={busy}
           onPress={() => {

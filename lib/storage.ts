@@ -414,6 +414,25 @@ export function datesInRange(start: IsoDate, end: IsoDate): readonly IsoDate[] {
   return dates;
 }
 
+/**
+ * The span of days that actually contain a logged check-in: earliest → latest. `null` when
+ * nothing is logged. IsoDate sorts lexically, so localeCompare is chronological. Gap-filled
+ * empty entries (no morning and no evening) don't count, so leading/trailing empty days are
+ * never invented — but a skipped day between two logged days stays inside the range. Pure.
+ */
+export function loggedDateRange(
+  entries: Readonly<Record<IsoDate, DayEntry>>,
+): { readonly start: IsoDate; readonly end: IsoDate } | null {
+  const logged = Object.values(entries)
+    .filter((entry) => entry.morning !== undefined || entry.evening !== undefined)
+    .map((entry) => entry.date)
+    .sort((a, b) => a.localeCompare(b));
+  const first = logged[0];
+  const last = logged[logged.length - 1];
+  if (first === undefined || last === undefined) return null;
+  return { start: first, end: last };
+}
+
 /** Consecutive days ending at `today` with at least one completed session. */
 export function computeStreak(
   entries: Readonly<Record<IsoDate, DayEntry>>,
