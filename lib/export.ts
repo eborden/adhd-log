@@ -638,6 +638,86 @@ function beforeAfterHtml(items: readonly BeforeAfter[]): string {
   return blocks.length === 0 ? '' : `<h2>Before / after dose changes</h2>${blocks.join('')}`;
 }
 
+/** The per-day side-effect cell: every reported effect with its severity, or an em dash. */
+function sideEffectsCell(row: DayEntry): string {
+  const evening = row.evening;
+  if (evening === undefined) return '—';
+  const parts = SIDE_EFFECTS.flatMap((effect) => {
+    const detail = evening.sideEffects[effect];
+    return detail === undefined
+      ? []
+      : [`${SIDE_EFFECT_LABELS[effect]} (${SIDE_EFFECT_SEVERITY_LABELS[detail.severity]})`];
+  });
+  return parts.length === 0 ? '—' : escapeHtml(parts.join(', '));
+}
+
+/**
+ * The daily log renders one column per tracked metric, schema-driven — so adding a metric in
+ * `lib/schema.ts` flows through automatically. Free-text notes are the one exclusion: they have a
+ * dedicated dated section that honors the `includeNotes` toggle, so a raw column would both
+ * duplicate them and bypass that toggle. Column order follows the check-in schema.
+ */
+const DAILY_LOG_METRICS: readonly Metric[] = [...MORNING_METRICS, ...EVENING_METRICS].filter(
+  (metric) => metric.kind !== 'text',
+);
+
+/** Whether a metric has any captured value across these rows — drives which columns appear. */
+export function dailyLogHasValue(metric: Metric, row: DayEntry): boolean {
+  switch (metric.kind) {
+    case 'toggle':
+      return row.morning !== undefined;
+    case 'scale': {
+      const pick = ratingAccessor(
+        isMorningRatingKey(metric.key) ? 'morning' : 'evening',
+        metric.key,
+      );
+      return pick(row) !== undefined;
+    }
+    case 'stepper':
+      return row.morning?.sleepHours !== undefined;
+    case 'chips': {
+      const evening = row.evening;
+      return (
+        evening !== undefined && SIDE_EFFECTS.some((e) => evening.sideEffects[e] !== undefined)
+      );
+    }
+    case 'text':
+      return false;
+    default:
+      return assertNever(metric);
+  }
+}
+
+/** The metrics with data in range, in schema order — the daily log's columns. */
+export function dailyLogColumns(rows: readonly DayEntry[]): readonly Metric[] {
+  return DAILY_LOG_METRICS.filter((metric) => rows.some((row) => dailyLogHasValue(metric, row)));
+}
+
+/** One daily-log cell's text for a metric on a given day. */
+export function dailyLogCell(metric: Metric, row: DayEntry): string {
+  switch (metric.kind) {
+    case 'toggle':
+      return row.morning === undefined ? '—' : row.morning.doseTaken ? 'Yes' : 'No';
+    case 'scale': {
+      const pick = ratingAccessor(
+        isMorningRatingKey(metric.key) ? 'morning' : 'evening',
+        metric.key,
+      );
+      return formatRating(pick(row));
+    }
+    case 'stepper': {
+      const hours = row.morning?.sleepHours;
+      return hours === undefined ? '—' : String(hours);
+    }
+    case 'chips':
+      return sideEffectsCell(row);
+    case 'text':
+      return '—';
+    default:
+      return assertNever(metric);
+  }
+}
+
 /**
  * Options for a report render. Range is resolved before this call (via `datesInRange` /
  * `lastNDates`) and arrives as explicit `rangeStart`/`rangeEnd` params, so it is deliberately
@@ -771,28 +851,18 @@ export function buildReportHtml(
           )
           .join('')}</ul>`;
 
-  const sideEffectsCell = (row: DayEntry): string => {
-    const evening = row.evening;
-    if (evening === undefined) return '—';
-    const parts = SIDE_EFFECTS.flatMap((effect) => {
-      const detail = evening.sideEffects[effect];
-      return detail === undefined
-        ? []
-        : [`${SIDE_EFFECT_LABELS[effect]} (${SIDE_EFFECT_SEVERITY_LABELS[detail.severity]})`];
-    });
-    return parts.length === 0 ? '—' : escapeHtml(parts.join(', '));
-  };
-
+  // Daily log columns are schema-driven and pruned to metrics with data in range: show everything
+  // captured, nothing that wasn't.
+  const dailyColumns = dailyLogColumns(rows);
+  const dailyHeader = `<tr><th>Date</th>${dailyColumns
+    .map((metric) => `<th>${escapeHtml(metric.label)}</th>`)
+    .join('')}</tr>`;
   const dailyRows = rows
     .map(
-      (row) => `<tr>
-        <td>${escapeHtml(row.date)}</td>
-        <td>${formatRating(row.morning?.ratings.sleepQuality)}</td>
-        <td>${formatRating(row.morning?.ratings.wakingMood)}</td>
-        <td>${formatRating(row.evening?.ratings.mood)}</td>
-        <td>${formatRating(row.evening?.ratings.focus)}</td>
-        <td>${sideEffectsCell(row)}</td>
-      </tr>`,
+      (row) =>
+        `<tr><td>${escapeHtml(row.date)}</td>${dailyColumns
+          .map((metric) => `<td>${dailyLogCell(metric, row)}</td>`)
+          .join('')}</tr>`,
     )
     .join('');
 
@@ -864,7 +934,7 @@ export function buildReportHtml(
       ${notesSection}
       <h2>Daily log</h2>
       <table>
-        <tr><th>Date</th><th>Sleep</th><th>Waking mood</th><th>Mood</th><th>Focus</th><th>Side effects</th></tr>
+        ${dailyHeader}
         ${dailyRows}
       </table>
     </body>

@@ -3,6 +3,26 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Schema-driven daily log (2026-07-19)
+
+**Problem:** The report's daily-log table hard-coded six columns (Date, Sleep, Waking mood, Mood,
+Focus, Side effects), so captured metrics — impulsivity, anxiety, energy, appetite, libido, sleep
+hours, and dose-taken — never appeared. The raw per-day record silently dropped data the user had
+entered.
+
+**Decision:** The daily log now builds its columns generically from the schema
+(`[...MORNING_METRICS, ...EVENING_METRICS]`) and prunes to the metrics with at least one captured
+value in range — show everything captured, nothing that wasn't. New exported pure helpers in
+`lib/export.ts`: `dailyLogColumns` (which columns), `dailyLogHasValue` (presence predicate driving
+inclusion), and `dailyLogCell` (per-metric cell text, exhaustive `switch` → `assertNever`); the
+per-day `sideEffectsCell` moved to module scope to be shared. Column order follows the check-in
+schema, so adding a metric in `lib/schema.ts` flows into the report automatically.
+
+Free-text notes are the one deliberate exclusion: they keep their dedicated dated section, which
+renders them richly and honors the `includeNotes` toggle — a raw column would duplicate them and
+bypass that toggle. Headers use the schema `label` (single source of truth) rather than a parallel
+short-label map. No persisted-shape change; the golden scenario reports were regenerated.
+
 ## Golden provider-report scenarios (2026-07-19)
 
 **Problem:** The provider report (`buildReportHtml`) is the app's whole reason to exist, but its

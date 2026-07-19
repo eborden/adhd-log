@@ -10,6 +10,9 @@ import {
   collectNotes,
   computeAdherence,
   computeTrend,
+  dailyLogCell,
+  dailyLogColumns,
+  dailyLogHasValue,
   exportJsonBackup,
   exportPdfReport,
   importJsonBackup,
@@ -24,7 +27,7 @@ import {
   type ReportOptions,
 } from '../export';
 import { addDays, isoTimestampNow } from '../storage';
-import type { DayEntry, DoseChange, IsoDate, Profile, Rating, SideEffect } from '../types';
+import type { DayEntry, DoseChange, IsoDate, Metric, Profile, Rating, SideEffect } from '../types';
 
 const NO_ONSET = new Map<SideEffect, IsoDate>();
 
@@ -86,6 +89,127 @@ function htmlFromRows(
     ? buildReportHtml(profile, doses, entries, start, end)
     : buildReportHtml(profile, doses, entries, start, end, options);
 }
+
+const DOSE_TAKEN_METRIC: Metric = { kind: 'toggle', key: 'doseTaken', label: "Took today's dose" };
+const SLEEP_HOURS_METRIC: Metric = {
+  kind: 'stepper',
+  key: 'sleepHours',
+  label: 'Hours slept',
+  min: 0,
+  max: 14,
+  step: 1,
+};
+const MOOD_METRIC: Metric = {
+  kind: 'scale',
+  key: 'mood',
+  label: 'Overall mood today',
+  low: 'Low',
+  high: 'Great',
+  direction: 'higher-better',
+};
+const SIDE_EFFECTS_METRIC: Metric = {
+  kind: 'chips',
+  key: 'sideEffects',
+  label: 'Side effects',
+  options: [],
+};
+const NOTES_METRIC: Metric = { kind: 'text', key: 'notes', label: 'Anything else' };
+
+describe('daily log columns', () => {
+  it('includes exactly the metrics with captured data, in schema order', () => {
+    const rows: readonly DayEntry[] = [
+      {
+        date: DAY_1,
+        morning: {
+          ratings: { sleepQuality: 4 },
+          doseTaken: true,
+          sleepHours: 8,
+          completedAt: isoTimestampNow(),
+        },
+        evening: {
+          ratings: { mood: 3, focus: 4 },
+          sideEffects: { nausea: { severity: 'mild' } },
+          completedAt: isoTimestampNow(),
+        },
+      },
+    ];
+    const labels = dailyLogColumns(rows).map((metric) => metric.label);
+    expect(labels).toEqual([
+      "Took today's dose",
+      'Sleep quality',
+      'Hours slept',
+      'Overall mood today',
+      'Focus / attention',
+      'Side effects',
+    ]);
+  });
+
+  it('omits metrics that were never captured', () => {
+    const rows: readonly DayEntry[] = [eveningRatingRow(DAY_1, 3, 2)];
+    const labels = dailyLogColumns(rows).map((metric) => metric.label);
+    expect(labels).toEqual(['Overall mood today', 'Anxiety / irritability']);
+    expect(labels).not.toContain('Hours slept');
+    expect(labels).not.toContain("Took today's dose");
+  });
+
+  it('never includes free-text notes as a column', () => {
+    const rows: readonly DayEntry[] = [
+      {
+        date: DAY_1,
+        evening: {
+          ratings: { mood: 3 },
+          sideEffects: {},
+          notes: 'felt good',
+          completedAt: isoTimestampNow(),
+        },
+      },
+    ];
+    expect(dailyLogColumns(rows).some((metric) => metric.kind === 'text')).toBe(false);
+    expect(dailyLogHasValue(NOTES_METRIC, rows[0] ?? { date: DAY_1 })).toBe(false);
+  });
+});
+
+describe('dailyLogCell', () => {
+  const empty: DayEntry = { date: DAY_1 };
+  const full: DayEntry = {
+    date: DAY_1,
+    morning: {
+      ratings: { sleepQuality: 4 },
+      doseTaken: false,
+      sleepHours: 7,
+      completedAt: isoTimestampNow(),
+    },
+    evening: {
+      ratings: { mood: 5 },
+      sideEffects: { headache: { severity: 'moderate' } },
+      completedAt: isoTimestampNow(),
+    },
+  };
+
+  it('renders a toggle as Yes / No / dash', () => {
+    expect(dailyLogCell(DOSE_TAKEN_METRIC, full)).toBe('No');
+    expect(dailyLogCell(DOSE_TAKEN_METRIC, empty)).toBe('—');
+  });
+
+  it('renders a scale rating or a dash', () => {
+    expect(dailyLogCell(MOOD_METRIC, full)).toBe('5');
+    expect(dailyLogCell(MOOD_METRIC, empty)).toBe('—');
+  });
+
+  it('renders sleep hours or a dash', () => {
+    expect(dailyLogCell(SLEEP_HOURS_METRIC, full)).toBe('7');
+    expect(dailyLogCell(SLEEP_HOURS_METRIC, empty)).toBe('—');
+  });
+
+  it('renders side effects or a dash', () => {
+    expect(dailyLogCell(SIDE_EFFECTS_METRIC, full)).toBe('Headache (Moderate)');
+    expect(dailyLogCell(SIDE_EFFECTS_METRIC, empty)).toBe('—');
+  });
+
+  it('renders a dash for the excluded text metric', () => {
+    expect(dailyLogCell(NOTES_METRIC, full)).toBe('—');
+  });
+});
 
 describe('averageOf', () => {
   it('averages the values an accessor picks out, skipping missing days', () => {
