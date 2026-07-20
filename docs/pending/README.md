@@ -32,19 +32,19 @@ Landed plans move to `docs/DECISIONS.md` and are struck through here.
 Priority = value ÷ effort within the mission (**collect → log → provider**), P1 before P2.
 Each doc references its source item in the user-value analysis.
 
-| #   | Plan                                                                      | Priority | Why it matters                                                                                                                               |
-| --- | ------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 06  | ~~Provider report overhaul~~ ✅ landed (see DECISIONS)                    | **P1**   | The report is the deliverable: per-period & before/after-dose averages, adherence, side-effect summary, notes, sparklines, a 20-second cover |
-| 07  | [Confounder / context tags](07-confounder-context-tags.md)                | **P1**   | Optional one-tap evening tags so the provider can discount confounded days — the biggest lever on signal quality                             |
-| 08  | [Rolling-average trend smoothing](08-rolling-average-trends.md)           | **P1**   | 7-day smoothing makes the weeks-long trend visible under day-to-day noise                                                                    |
-| 09  | [Trend data honesty: coverage + gaps](09-trend-data-honesty.md)           | **P1**   | "Logged 22/30" coverage + unambiguous gap rendering so sparse trends aren't over-read                                                        |
-| 10  | ~~Side-effect severity & onset~~ ✅ landed (see DECISIONS)                | **P1**   | Severity + first-appearance turns a checkbox into a real push-through-or-change input                                                        |
-| 11  | [Visit anchoring & "since last visit"](11-visit-anchoring.md)             | **P1**   | Record appointments → report defaults to "since last visit" + pre-visit nudge; ties the loop to the care rhythm                              |
-| 12  | [Dose adherence & timing](12-dose-adherence-timing.md)                    | P2       | taken/late/missed (+ time) instead of a boolean; adherence % feeds the report                                                                |
-| 13  | [Weekly global-impression check-in](13-weekly-global-impression.md)       | P2       | A lightweight weekly PGI-C-style "vs last week: better/same/worse" — a global-change signal clinicians use                                   |
-| 14  | [Baseline capture at medication start](14-baseline-capture.md)            | P2       | A pre-start snapshot so current-vs-baseline deltas are legible                                                                               |
-| 15  | [Check-in friction reducers](15-checkin-friction-reducers.md)             | P2       | "Same as yesterday" prefill + notification quick-actions/snooze — protect the completion rate every trend depends on                         |
-| 16  | [Before/after dose-change comparison](16-before-after-dose-comparison.md) | P2       | Mean of N days before vs after each titration step — a descriptive dose-response view                                                        |
+| #   | Plan                                                                      | Priority | Why it matters                                                                                                                                |
+| --- | ------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 06  | ~~Provider report overhaul~~ ✅ landed (see DECISIONS)                    | **P1**   | The report is the deliverable: per-period & before/after-dose averages, adherence, side-effect summary, notes, sparklines, a 20-second cover  |
+| 07  | [Confounder / context tags](07-confounder-context-tags.md)                | **P1**   | Optional one-tap evening tags so the provider can discount confounded days — the biggest lever on signal quality                              |
+| 08  | [Rolling-average trend smoothing](08-rolling-average-trends.md)           | **P1**   | 7-day smoothing makes the weeks-long trend visible under day-to-day noise                                                                     |
+| 09  | [Trend data honesty: coverage + gaps](09-trend-data-honesty.md)           | **P1**   | "Logged 22/30" coverage + unambiguous gap rendering so sparse trends aren't over-read                                                         |
+| 10  | ~~Side-effect severity & onset~~ ✅ landed (see DECISIONS)                | **P1**   | Severity + first-appearance turns a checkbox into a real push-through-or-change input                                                         |
+| 11  | [Visit anchoring & "since last visit"](11-visit-anchoring.md)             | **P1**   | Record appointments → report defaults to "since last visit" + pre-visit nudge; ties the loop to the care rhythm                               |
+| 12  | [Dose adherence & timing](12-dose-adherence-timing.md)                    | P2       | taken/late/missed (+ time) instead of a boolean; adherence % feeds the report                                                                 |
+| 13  | [Weekly global-impression check-in](13-weekly-global-impression.md)       | P2       | A lightweight weekly PGI-C-style "vs last week: better/same/worse" — a global-change signal clinicians use                                    |
+| 14  | [Baseline capture at medication start](14-baseline-capture.md)            | P2       | A pre-start snapshot so current-vs-baseline deltas are legible                                                                                |
+| 15  | [Check-in friction reducers](15-checkin-friction-reducers.md)             | P2       | "Same as yesterday" prefill + notification quick-actions/snooze — protect the completion rate every trend depends on                          |
+| 16  | [Before/after dose-change comparison](16-before-after-dose-comparison.md) | P2       | Rescoped: report section shipped in 06 — remaining is surfacing sample-size + adherence beside each mean, plus the unbuilt in-app Trends view |
 
 ### How the 06–16 docs were produced
 
