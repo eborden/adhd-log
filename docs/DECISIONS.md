@@ -3,6 +3,44 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Trends logging-coverage caption + honest gap rendering (2026-07-19)
+
+**Problem:** `app/(tabs)/trends.tsx` never said how many of the visible days were actually
+logged, and rendered an unlogged day as a short `theme.border`-colored bar (`barHeight`
+returned `4` for `undefined`) — visually indistinguishable from a genuinely low rating. A
+sparse range's trend line silently invented dips that were really just missing data.
+
+**Decision:** Implemented the rescoped `docs/pending/09-trend-data-honesty.md` (rescoped
+earlier the same day after the provider-report overhaul obsoleted its PDF-report half — see
+that doc's "What changed" section; the report-side denominator now belongs to item 16).
+
+- New pure helpers in `lib/export.ts`: `coverage(rows, pick, since?)` returns
+  `{ logged, total }`, with `total` floored to `since` so pre-install days are never counted
+  as missing; `loggingStartDate(profile)` derives that floor from `profile.createdAt` via the
+  existing `formatIsoDate` guard-and-throw. Both are pure and RN-free.
+- `trends.tsx` now loads `Profile` again (via `loadProfile`) to compute the floor — reversing
+  the "no longer loads Profile at all" line in the earlier "Trends/reports reflect data, not
+  the Settings toggle" decision below. That decision was about not filtering a metric's
+  _visibility_ by the Settings enable/disable toggle; it's unrelated to using
+  `profile.createdAt` as the coverage denominator's floor, so re-adding the load doesn't
+  reopen that decision — flagged here so the two entries don't read as contradictory.
+- Each metric block now shows a `logged {n} of {total} days` caption (spelled out, not a bare
+  `n/total` fraction, so it doesn't scan like a compliance grade) and renders an unlogged day
+  as a hollow dashed `gapPlaceholder` outline instead of a filled bar — unfilled, so it can
+  never be confused with a `ratingColor` fill in either color scheme.
+- `barHeight` tightened to `barHeight(rating: Rating): number`, dropping its now-unreachable
+  `undefined → 4` branch now that the gap case is a separate render path.
+- Tests in `lib/__tests__/export.test.ts` pin `coverage`'s edge cases (fully/partially/
+  never-logged, empty range, the tenure floor) plus two agreement checks: `coverage(...).logged
+=== metricAverage(...).n` (so Trends' "logged" and the report's already-shipped
+  `MetricAverage.n` — item 16's territory — can never drift apart) and `coverage(...).logged
+=== 0 ⇔ averageOf(...) === null`.
+
+No persisted-shape change; `coverage`/`loggingStartDate` are derived-only and touch neither
+`Backup` nor any guard.
+
+Supersedes and closes `docs/pending/09-trend-data-honesty.md`.
+
 ## Wider report tables: unbroken sparklines, de-dated + vertical weekly headers (2026-07-19)
 
 **Problem:** Three coupled layout faults in the report tables. (1) The trend sparklines — inline
