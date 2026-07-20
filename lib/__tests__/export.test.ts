@@ -10,12 +10,14 @@ import {
   collectNotes,
   computeAdherence,
   computeTrend,
+  coverage,
   dailyLogCell,
   dailyLogColumns,
   dailyLogHasValue,
   exportJsonBackup,
   exportPdfReport,
   importJsonBackup,
+  loggingStartDate,
   metricAverage,
   parseBackup,
   ratingAccessor,
@@ -26,7 +28,7 @@ import {
   type MetricAverage,
   type ReportOptions,
 } from '../export';
-import { addDays, isoTimestampNow } from '../storage';
+import { addDays, formatIsoDate, isoTimestampNow } from '../storage';
 import { palette } from '../tokens';
 import type { DayEntry, DoseChange, IsoDate, Metric, Profile, Rating, SideEffect } from '../types';
 
@@ -222,6 +224,71 @@ describe('averageOf', () => {
   it('returns null when no row has a value', () => {
     const rows: readonly DayEntry[] = [{ date: DAY_1 }, { date: DAY_2 }];
     expect(averageOf(rows, (row) => row.morning?.ratings.sleepQuality)).toBeNull();
+  });
+});
+
+describe('coverage', () => {
+  const sleepPick = (row: DayEntry): Rating | undefined => row.morning?.ratings.sleepQuality;
+
+  it('returns logged === total on a fully logged range (unbounded)', () => {
+    const rows: readonly DayEntry[] = [morningRow(DAY_1, 2), morningRow(DAY_2, 3)];
+    expect(coverage(rows, sleepPick)).toEqual({ logged: 2, total: 2 });
+    expect(rows).toHaveLength(2);
+  });
+
+  it('counts only the logged rows on a partially logged range (unbounded)', () => {
+    const rows: readonly DayEntry[] = [morningRow(DAY_1, 2), { date: DAY_2 }, morningRow(DAY_3, 4)];
+    expect(coverage(rows, sleepPick)).toEqual({ logged: 2, total: 3 });
+    expect(rows).toHaveLength(3);
+  });
+
+  it('returns logged: 0 on an all-unlogged range (unbounded)', () => {
+    const rows: readonly DayEntry[] = [{ date: DAY_1 }, { date: DAY_2 }];
+    expect(coverage(rows, sleepPick)).toEqual({ logged: 0, total: 2 });
+    expect(rows).toHaveLength(2);
+  });
+
+  it('returns logged: 0, total: 0 on an empty range (unbounded)', () => {
+    expect(coverage([], sleepPick)).toEqual({ logged: 0, total: 0 });
+  });
+
+  it('floors total to rows on/after `since`, without dropping any logged day', () => {
+    const day0 = '2026-06-30' as IsoDate;
+    const rows: readonly DayEntry[] = [{ date: day0 }, morningRow(DAY_1, 2), { date: DAY_2 }];
+    expect(coverage(rows, sleepPick, DAY_1)).toEqual({ logged: 1, total: 2 });
+  });
+
+  it('agrees with metricAverage.n on the logged count', () => {
+    const rows: readonly DayEntry[] = [morningRow(DAY_1, 2), { date: DAY_2 }, morningRow(DAY_3, 4)];
+    const avg = metricAverage(rows, sleepPick);
+    const n = avg.kind === 'value' ? avg.n : 0;
+    expect(coverage(rows, sleepPick).logged).toBe(n);
+  });
+
+  it('agrees with averageOf: logged is zero iff the average is null', () => {
+    const loggedRows: readonly DayEntry[] = [morningRow(DAY_1, 2), { date: DAY_2 }];
+    const emptyRows: readonly DayEntry[] = [{ date: DAY_1 }, { date: DAY_2 }];
+    expect(coverage(loggedRows, sleepPick).logged === 0).toBe(
+      averageOf(loggedRows, sleepPick) === null,
+    );
+    expect(coverage(emptyRows, sleepPick).logged === 0).toBe(
+      averageOf(emptyRows, sleepPick) === null,
+    );
+  });
+});
+
+describe('loggingStartDate', () => {
+  it('returns the calendar date of profile.createdAt', () => {
+    const profile: Profile = {
+      medName: 'Atomoxetine' as Profile['medName'],
+      startDate: DAY_1,
+      currentDose: { amount: 40, unit: 'mg' },
+      morningReminder: { hour: 8, minute: 0 },
+      eveningReminder: { hour: 20, minute: 0 },
+      lockEnabled: false,
+      createdAt: '2026-06-15T09:30:00.000Z' as Profile['createdAt'],
+    };
+    expect(loggingStartDate(profile)).toBe(formatIsoDate(new Date(profile.createdAt)));
   });
 });
 

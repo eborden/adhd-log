@@ -14,6 +14,7 @@ import {
   datesInRange,
   doseActiveOn,
   firstOnsetDates,
+  formatIsoDate,
   isDoseChangeList,
   isEveningRatingKey,
   isIsoTimestamp,
@@ -73,6 +74,41 @@ export function averageOf(
   const values = rows.map(pick).filter((value): value is Rating => value !== undefined);
   if (values.length === 0) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/** Logged-vs-total day count for one metric over a date range. Purely descriptive. */
+export interface Coverage {
+  readonly logged: number;
+  readonly total: number;
+}
+
+/**
+ * The first calendar day on which logging was possible — the date the profile
+ * was created. Coverage denominators floor here so days before the app existed
+ * are never counted as "missing". Not `startDate`: the medication start can
+ * precede or follow install; the honest "could-have-logged" floor is app
+ * existence (`createdAt`), not the med timeline.
+ */
+export function loggingStartDate(profile: Profile): IsoDate {
+  return formatIsoDate(new Date(profile.createdAt));
+}
+
+/**
+ * Counts logged (non-undefined) vs total rows for one accessor, purely
+ * descriptively. When `since` is supplied, `total` is floored to rows on or
+ * after that date, so days before logging was possible are not counted as
+ * missing. Both counts derive from the same floored window, so `logged <= total`
+ * holds structurally — and no logged entry can predate `createdAt`, so flooring
+ * only ever removes empty pre-tenure gap rows, never a logged day.
+ */
+export function coverage(
+  rows: readonly DayEntry[],
+  pick: (row: DayEntry) => Rating | undefined,
+  since?: IsoDate,
+): Coverage {
+  const inWindow = since === undefined ? rows : rows.filter((row) => row.date >= since);
+  const logged = inWindow.filter((row) => pick(row) !== undefined).length;
+  return { logged, total: inWindow.length };
 }
 
 /**
