@@ -85,6 +85,21 @@ export function coverage(
   return { logged, total: inWindow.length };
 }
 
+/** Whether a day has any logged session at all (morning or evening). */
+export function isDayLogged(row: DayEntry): boolean {
+  return row.morning !== undefined || row.evening !== undefined;
+}
+
+/**
+ * Page-level coverage: days with any logged session vs total days in the window. Floors `total`
+ * to `since` exactly like `coverage()`, so pre-tenure days are never counted as missing.
+ */
+export function daysLoggedCoverage(rows: readonly DayEntry[], since?: IsoDate): Coverage {
+  const inWindow = since === undefined ? rows : rows.filter((row) => row.date >= since);
+  const logged = inWindow.filter(isDayLogged).length;
+  return { logged, total: inWindow.length };
+}
+
 /**
  * A computed average is either a real mean over >=1 sample, or explicitly empty. No NaN, no magic
  * -1: the empty case is a distinct variant, so `noUncheckedIndexedAccess` concerns vanish and a

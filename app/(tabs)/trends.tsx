@@ -2,7 +2,12 @@ import { useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusLoad } from '../../hooks/useFocusLoad';
-import { coverage, loggingStartDate, ratingAccessor, rowsInRange } from '../../lib/metrics';
+import {
+  daysLoggedCoverage,
+  loggingStartDate,
+  ratingAccessor,
+  rowsInRange,
+} from '../../lib/metrics';
 import { EVENING_METRICS, MORNING_METRICS } from '../../lib/schema';
 import {
   doseChangeMarkers,
@@ -92,6 +97,7 @@ export default function Trends() {
   );
   const { dates, rows, markers, doses, profile } = data;
   const since = profile ? loggingStartDate(profile) : undefined;
+  const dayCoverage = daysLoggedCoverage(rows, since);
   const smoothingWindow = defaultWindowForRange(range);
   const boundaries = dosePeriodBoundaries(dates, doses);
   // Every metric block renders a same-width barsRow (same ScrollView content width, same
@@ -160,10 +166,15 @@ export default function Trends() {
         </Pressable>
       </View>
 
+      {dayCoverage.total > 0 ? (
+        <Text style={[typography.caption, styles.coverageCaption, { color: theme.textMuted }]}>
+          logged {dayCoverage.logged} of {dayCoverage.total} days
+        </Text>
+      ) : null}
+
       {visibleScaleMetrics.map(({ metric, session }, blockIndex) => {
         if (metric.kind !== 'scale') return null;
         const accessor = ratingAccessor(session, metric.key);
-        const cov = coverage(rows, accessor, since);
         const values = rows.map((row) => accessor(row));
         const smoothed = smoothingOn ? rollingAverage(values, smoothingWindow, boundaries) : null;
         const segments =
@@ -174,9 +185,6 @@ export default function Trends() {
           <View key={`${session}-${metric.key}`} style={styles.metricBlock}>
             <Text style={[typography.sectionLabel, styles.metricLabel, { color: theme.textMuted }]}>
               {metric.label}
-            </Text>
-            <Text style={[typography.caption, styles.coverageCaption, { color: theme.textMuted }]}>
-              logged {cov.logged} of {cov.total} days
             </Text>
             <View style={styles.barsRowWrapper}>
               <View

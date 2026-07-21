@@ -3,6 +3,7 @@ import {
   averageOf,
   computeTrend,
   coverage,
+  daysLoggedCoverage,
   loggingStartDate,
   metricAverage,
   ratingAccessor,
@@ -24,6 +25,13 @@ function morningRow(date: IsoDate, sleepQuality: Rating): DayEntry {
       doseTaken: true,
       completedAt: isoTimestampNow(),
     },
+  };
+}
+
+function eveningRow(date: IsoDate, mood: Rating): DayEntry {
+  return {
+    date,
+    evening: { ratings: { mood }, sideEffects: {}, completedAt: isoTimestampNow() },
   };
 }
 
@@ -87,6 +95,32 @@ describe('coverage', () => {
     expect(coverage(emptyRows, sleepPick).logged === 0).toBe(
       averageOf(emptyRows, sleepPick) === null,
     );
+  });
+});
+
+describe('daysLoggedCoverage', () => {
+  it('counts a day with only a morning session as logged', () => {
+    const rows: readonly DayEntry[] = [morningRow(DAY_1, 3), { date: DAY_2 }];
+    expect(daysLoggedCoverage(rows)).toEqual({ logged: 1, total: 2 });
+  });
+
+  it('counts a day with only an evening session as logged', () => {
+    const rows: readonly DayEntry[] = [eveningRow(DAY_1, 4), { date: DAY_2 }];
+    expect(daysLoggedCoverage(rows)).toEqual({ logged: 1, total: 2 });
+  });
+
+  it('does not count an empty row as logged', () => {
+    expect(daysLoggedCoverage([{ date: DAY_1 }])).toEqual({ logged: 0, total: 1 });
+  });
+
+  it('floors total to rows on/after `since`, without dropping any logged day', () => {
+    const day0 = '2026-06-30' as IsoDate;
+    const rows: readonly DayEntry[] = [{ date: day0 }, morningRow(DAY_1, 2), { date: DAY_2 }];
+    expect(daysLoggedCoverage(rows, DAY_1)).toEqual({ logged: 1, total: 2 });
+  });
+
+  it('returns logged: 0, total: 0 on an empty range', () => {
+    expect(daysLoggedCoverage([])).toEqual({ logged: 0, total: 0 });
   });
 });
 
