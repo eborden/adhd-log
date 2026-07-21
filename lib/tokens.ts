@@ -96,6 +96,16 @@ export const fontWeight = {
   heavy: '800',
 } as const;
 
+/**
+ * Serif display face (Fraunces) for header roles — `display`/`title`/`cardTitle` in
+ * `lib/theme.ts`'s `typography`. Named per static weight file from
+ * `@expo-google-fonts/fraunces`; body/caption/button roles stay on the system sans.
+ */
+export const fontFamily = {
+  serifBold: 'Fraunces_700Bold',
+  serifHeavy: 'Fraunces_800ExtraBold',
+} as const;
+
 export const letterSpacing = {
   tight: -0.5,
   snug: -0.3,

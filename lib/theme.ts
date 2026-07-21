@@ -1,6 +1,7 @@
 import { useColorScheme } from 'react-native';
 import type { TextStyle, ViewStyle } from 'react-native';
 import {
+  fontFamily,
   fontSize,
   fontWeight,
   letterSpacing,
@@ -85,15 +86,15 @@ export function useTheme(): Theme {
 /** Named text-style roles — the only type styling components apply. */
 export const typography = {
   display: {
+    fontFamily: fontFamily.serifHeavy,
     fontSize: fontSize.display,
     lineHeight: lineHeight.display,
-    fontWeight: fontWeight.heavy,
     letterSpacing: letterSpacing.tight,
   },
   title: {
+    fontFamily: fontFamily.serifBold,
     fontSize: fontSize.xxl,
     lineHeight: lineHeight.xxl,
-    fontWeight: fontWeight.bold,
     letterSpacing: letterSpacing.snug,
   },
   sectionLabel: {
@@ -103,9 +104,9 @@ export const typography = {
     textTransform: 'uppercase',
   },
   cardTitle: {
+    fontFamily: fontFamily.serifBold,
     fontSize: fontSize.xl,
     lineHeight: lineHeight.xl,
-    fontWeight: fontWeight.bold,
     letterSpacing: letterSpacing.snug,
   },
   body: {
