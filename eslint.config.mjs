@@ -15,6 +15,7 @@ export default defineConfig(
       'android/**',
       'ios/**',
       'scripts/**',
+      '.claude/**',
       'expo-env.d.ts',
     ],
   },
