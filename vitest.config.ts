@@ -25,6 +25,7 @@ export default defineConfig({
         'lib/storage.ts',
         'lib/export.ts',
         'lib/checkin.ts',
+        'lib/trends.ts',
       ],
       thresholds: {
         lines: 90,
