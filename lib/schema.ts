@@ -1,6 +1,5 @@
 import {
   SIDE_EFFECTS,
-  assertNever,
   type EveningRatingKey,
   type Metric,
   type Profile,
@@ -115,20 +114,6 @@ export const SIDE_EFFECT_SEVERITY_LABELS: Readonly<Record<SideEffectSeverity, st
   moderate: 'Moderate',
   severe: 'Severe',
 };
-
-/** Bound to the secondary severity control only, never the chip body. Exhaustive → assertNever. */
-export function cycleSeverity(current: SideEffectSeverity): SideEffectSeverity {
-  switch (current) {
-    case 'mild':
-      return 'moderate';
-    case 'moderate':
-      return 'severe';
-    case 'severe':
-      return 'mild';
-    default:
-      return assertNever(current);
-  }
-}
 
 export function isSideEffectSelected(reports: SideEffectReports, effect: SideEffect): boolean {
   return reports[effect] !== undefined;

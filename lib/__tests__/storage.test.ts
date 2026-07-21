@@ -4,7 +4,6 @@ import {
   addDays,
   appendDoseChange,
   type CheckinInput,
-  clearAllData,
   computeStreak,
   datesInRange,
   doseActiveOn,
@@ -13,7 +12,6 @@ import {
   formatIsoDate,
   isDayEntry,
   isDoseChangeList,
-  isEntries,
   isEveningCheckin,
   isEveningRatingKey,
   isIsoDate,
@@ -29,7 +27,6 @@ import {
   loadEntries,
   loadProfile,
   loggedDateRange,
-  parseDoseChangeList,
   parseEntries,
   parseEntriesTolerant,
   parseEveningCheckin,
@@ -67,7 +64,7 @@ function buildProfile(): Profile {
 }
 
 beforeEach(async () => {
-  await clearAllData();
+  await AsyncStorage.multiRemove(await AsyncStorage.getAllKeys());
 });
 
 describe('isRating', () => {
@@ -156,7 +153,7 @@ describe('isProfile', () => {
   });
 });
 
-describe('isDayEntry / isEntries', () => {
+describe('isDayEntry', () => {
   const validEntry = {
     date: '2026-07-17',
     morning: {
@@ -177,14 +174,6 @@ describe('isDayEntry / isEntries', () => {
         morning: { ...validEntry.morning, ratings: { sleepQuality: 9 } },
       }),
     ).toBe(false);
-  });
-
-  it('rejects an entries map with a bad date key', () => {
-    expect(isEntries({ 'not-a-date': validEntry })).toBe(false);
-  });
-
-  it('accepts an empty entries map', () => {
-    expect(isEntries({})).toBe(true);
   });
 });
 
@@ -426,10 +415,9 @@ describe('isDoseChangeList', () => {
   });
 });
 
-describe('parseProfile / parseDoseChangeList / parseEntries', () => {
+describe('parseProfile / parseEntries', () => {
   it('returns ok:true for valid JSON', () => {
     expect(parseProfile(VALID_PROFILE)).toEqual({ ok: true, value: VALID_PROFILE });
-    expect(parseDoseChangeList([])).toEqual({ ok: true, value: [] });
     expect(parseEntries({})).toEqual({ ok: true, value: {} });
   });
 
@@ -437,9 +425,6 @@ describe('parseProfile / parseDoseChangeList / parseEntries', () => {
     const badProfile = parseProfile({ medName: 'x' });
     expect(badProfile.ok).toBe(false);
     if (!badProfile.ok) expect(badProfile.reason).toMatch(/profile/i);
-
-    const badDoses = parseDoseChangeList([{}]);
-    expect(badDoses.ok).toBe(false);
 
     const badEntries = parseEntries({ bad: {} });
     expect(badEntries.ok).toBe(false);
@@ -681,25 +666,6 @@ describe('persistence', () => {
     expect(await loadProfile()).toEqual(profile);
     expect(await loadDoseChanges()).toEqual(doses);
     expect(await loadEntries()).toEqual(entries);
-  });
-
-  it('clearAllData removes profile, doses, and entries', async () => {
-    await saveProfile(buildProfile());
-    await appendDoseChange({ date: '2026-07-01' as IsoDate, dose: { amount: 20, unit: 'mg' } });
-    await saveCheckin('2026-07-17' as IsoDate, {
-      session: 'morning',
-      checkin: {
-        ratings: { sleepQuality: 4, wakingMood: 4 },
-        doseTaken: true,
-        completedAt: isoTimestampNow(),
-      },
-    });
-
-    await clearAllData();
-
-    expect(await loadProfile()).toBeNull();
-    expect(await loadDoseChanges()).toEqual([]);
-    expect(await loadEntries()).toEqual({});
   });
 });
 

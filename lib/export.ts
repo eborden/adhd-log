@@ -146,11 +146,6 @@ const TREND_DEADBAND = 0.3;
 // confident-looking arrow.
 const MIN_HALF_SAMPLES = 3;
 
-/** The single adapter from a legacy `number | null` mean to the canonical union. */
-export function toMetricAverage(mean: number | null, n: number): MetricAverage {
-  return mean === null || n === 0 ? { kind: 'empty' } : { kind: 'value', mean, n };
-}
-
 /** Canonical average producer: counts samples and means them, yielding a `MetricAverage`. */
 export function metricAverage(
   rows: readonly DayEntry[],

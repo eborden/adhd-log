@@ -245,12 +245,6 @@ export function isDayEntry(value: unknown): boolean {
   return parseDayEntry(value) !== undefined;
 }
 
-/** Validity check ONLY — never the value path (that's `parseEntries`/`parseEntriesTolerant`). */
-export function isEntries(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  return Object.entries(value).every(([key, entry]) => isIsoDate(key) && isDayEntry(entry));
-}
-
 // ---------------------------------------------------------------------------
 // Parsed<T> — storage boundary. Callers get an explicit ok/reason, never a throw.
 // ---------------------------------------------------------------------------
@@ -258,11 +252,6 @@ export function isEntries(value: unknown): boolean {
 export function parseProfile(raw: unknown): Parsed<Profile> {
   if (isProfile(raw)) return { ok: true, value: raw };
   return { ok: false, reason: 'Malformed profile JSON' };
-}
-
-export function parseDoseChangeList(raw: unknown): Parsed<readonly DoseChange[]> {
-  if (isDoseChangeList(raw)) return { ok: true, value: raw };
-  return { ok: false, reason: 'Malformed dose-change JSON' };
 }
 
 /**
@@ -577,10 +566,6 @@ export async function saveCheckin(date: IsoDate, input: CheckinInput): Promise<D
   };
   await saveEntries({ ...entries, [date]: merged });
   return merged;
-}
-
-export async function clearAllData(): Promise<void> {
-  await AsyncStorage.multiRemove([STORAGE_KEYS.profile, STORAGE_KEYS.doses, STORAGE_KEYS.entries]);
 }
 
 /**

@@ -105,13 +105,6 @@ export async function scheduleReminders(profile: Profile): Promise<void> {
   );
 }
 
-export async function cancelReminders(): Promise<void> {
-  const notifications = await loadNotifications();
-  if (notifications === null) return;
-  await notifications.cancelScheduledNotificationAsync(NOTIFICATION_IDS.morning);
-  await notifications.cancelScheduledNotificationAsync(NOTIFICATION_IDS.evening);
-}
-
 function isSession(value: unknown): value is Session {
   return value === 'morning' || value === 'evening';
 }

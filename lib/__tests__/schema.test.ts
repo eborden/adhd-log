@@ -5,7 +5,6 @@ import {
   MORNING_METRICS,
   SIDE_EFFECT_LABELS,
   SIDE_EFFECT_SEVERITY_LABELS,
-  cycleSeverity,
   directionForRatingKey,
   enabledEveningMetricKeys,
   isSideEffectSelected,
@@ -68,14 +67,6 @@ describe('SIDE_EFFECT_SEVERITY_LABELS', () => {
     for (const severity of SIDE_EFFECT_SEVERITIES) {
       expect(SIDE_EFFECT_SEVERITY_LABELS[severity]).toBeTruthy();
     }
-  });
-});
-
-describe('cycleSeverity', () => {
-  it('cycles mild -> moderate -> severe -> mild', () => {
-    expect(cycleSeverity('mild')).toBe('moderate');
-    expect(cycleSeverity('moderate')).toBe('severe');
-    expect(cycleSeverity('severe')).toBe('mild');
   });
 });
 

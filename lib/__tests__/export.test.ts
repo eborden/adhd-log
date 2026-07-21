@@ -25,7 +25,6 @@ import {
   rowsInRange,
   severityRunLength,
   sideEffectSummary,
-  toMetricAverage,
   type MetricAverage,
   type ReportOptions,
 } from '../export';
@@ -323,14 +322,6 @@ describe('ratingAccessor', () => {
   it('reads undefined for a key that does not belong to the session', () => {
     // 'mood' is an evening key; asking for it in the morning session yields undefined.
     expect(ratingAccessor('morning', 'mood')(morningRow(DAY_1, 5))).toBeUndefined();
-  });
-});
-
-describe('toMetricAverage', () => {
-  it('maps a null mean or zero samples to empty, and a real mean to value', () => {
-    expect(toMetricAverage(null, 0)).toEqual({ kind: 'empty' });
-    expect(toMetricAverage(3.2, 0)).toEqual({ kind: 'empty' });
-    expect(toMetricAverage(3.2, 4)).toEqual({ kind: 'value', mean: 3.2, n: 4 });
   });
 });
 
