@@ -24,6 +24,7 @@ export default defineConfig({
         'lib/schema.ts',
         'lib/storage.ts',
         'lib/backup.ts',
+        'lib/metrics.ts',
         'lib/export.ts',
         'lib/checkin.ts',
         'lib/trends.ts',
