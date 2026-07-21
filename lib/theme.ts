@@ -34,6 +34,13 @@ export interface Theme {
   readonly good: string;
   readonly bad: string;
   readonly neutral: string;
+  /**
+   * For a line/mark drawn *over* a `good`/`bad`/`neutral`-colored bar (e.g. the Trends
+   * smoothing overlay) — a hue outside that rating spectrum, so it never blends into a
+   * same-colored bar underneath it. Deliberately not `accent`: `accent`'s pine green sits too
+   * close in hue/lightness to `good`'s green to read reliably on top of it.
+   */
+  readonly trendLine: string;
 }
 
 const light: Theme = {
@@ -50,6 +57,7 @@ const light: Theme = {
   good: palette.greenStrong,
   bad: palette.clayStrong,
   neutral: palette.ochreStrong,
+  trendLine: palette.indigoStrong,
 };
 
 const dark: Theme = {
@@ -66,6 +74,7 @@ const dark: Theme = {
   good: palette.greenLight,
   bad: palette.clayLight,
   neutral: palette.ochreLight,
+  trendLine: palette.indigoLight,
 };
 
 export function useTheme(): Theme {

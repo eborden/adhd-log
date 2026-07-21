@@ -40,6 +40,12 @@ export const palette = {
   clayLight: '#E08160',
   ochreStrong: '#94762F',
   ochreLight: '#D6B168',
+
+  // Trend-line hue — a blue, deliberately outside the green/clay/ochre rating spectrum (and far
+  // enough from the pine accent's own green) so an overlaid line never blends into a
+  // same-hued bar underneath it.
+  indigoStrong: '#33608F',
+  indigoLight: '#7FA8D9',
 } as const;
 
 /** 4-based spacing scale. */

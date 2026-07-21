@@ -215,7 +215,7 @@ export default function Trends() {
                         left: segment.left,
                         top: segment.top - SMOOTHED_LINE_THICKNESS / 2,
                         width: segment.width,
-                        backgroundColor: theme.accent,
+                        backgroundColor: theme.trendLine,
                         transform: [{ rotate: `${String(segment.rotationDeg)}deg` }],
                       },
                     ]}
