@@ -24,6 +24,7 @@ import {
   parseIsoDate,
   parseProfile,
 } from './storage';
+import { recentWindowDates, type SmoothingWindow } from './trends';
 import { EVENING_RATING_KEYS, MORNING_RATING_KEYS, SIDE_EFFECTS, assertNever } from './types';
 import type {
   DayEntry,
@@ -435,6 +436,78 @@ export function computeAdherence(rows: readonly DayEntry[]): AdherenceSummary {
     notTakenDates,
     noEntryDates,
   };
+}
+
+/**
+ * A metric's grand average over the full report range, plus its dose-period-clamped recent
+ * average — the two figures the report's "Recent" column prints side by side.
+ */
+export interface ScaleAverage {
+  readonly label: string;
+  readonly direction: ScaleDirection;
+  readonly average: number | null; // grand mean over the whole range
+  readonly recentAverage: number | null; // mean over recentWindowDates (dose-clamped)
+}
+
+/**
+ * Doses taken vs. mornings logged in the recent window. `logged` excludes unlogged days,
+ * so a day with no morning check-in is never counted as a missed dose.
+ */
+export function adherenceInWindow(rows: readonly DayEntry[]): {
+  readonly taken: number;
+  readonly logged: number;
+} {
+  let taken = 0;
+  let logged = 0;
+  for (const row of rows) {
+    if (row.morning !== undefined) {
+      logged += 1;
+      if (row.morning.doseTaken) {
+        taken += 1;
+      }
+    }
+  }
+  return { taken, logged };
+}
+
+/** Shared null-safe formatter for a mean: '—' for no data, one decimal place otherwise. */
+function formatAverage(value: number | null): string {
+  return value === null ? '—' : value.toFixed(1);
+}
+
+/**
+ * The default "recent" window for the report's Recent column — matches the on-screen
+ * smoothing overlay's long-range default (see `defaultWindowForRange` in lib/trends.ts).
+ */
+export const REPORT_RECENT_WINDOW: SmoothingWindow = 7;
+
+/**
+ * The Recent-trend section: one row per scale metric with data in range, showing the grand
+ * average alongside a dose-period-clamped recent average, plus an adherence count and a plain
+ * caveat sentence for that identical window — so a precise-looking figure can never be read out
+ * of context. Omitted entirely when there is no recent window to describe (empty range).
+ */
+function recentAverageSectionHtml(
+  scaleAverages: readonly ScaleAverage[],
+  window: SmoothingWindow,
+  fromDate: IsoDate | undefined,
+  toDate: IsoDate | undefined,
+  adherence: { readonly taken: number; readonly logged: number },
+): string {
+  if (scaleAverages.length === 0 || fromDate === undefined || toDate === undefined) return '';
+  const rows = scaleAverages
+    .map(
+      (s) =>
+        `<tr><td>${escapeHtml(s.label)}</td><td>${formatAverage(s.average)}</td><td>${formatAverage(s.recentAverage)}</td></tr>`,
+    )
+    .join('');
+  const caveat = `Recent (${String(window)}-day avg) covers ${escapeHtml(fromDate)}–${escapeHtml(toDate)} (current dose period). Doses taken ${String(adherence.taken)} of ${String(adherence.logged)} logged mornings in this window. Average and Recent are arithmetic means of self-reported 1–5 ratings, not a validated clinical score, and do not otherwise account for adherence. Log this and discuss with your provider.`;
+  return `<h2>Recent trend</h2>
+     <table>
+       <tr><th>Metric</th><th>Average</th><th>Recent (${String(window)}d avg)</th></tr>
+       ${rows}
+     </table>
+     <p class="muted">${caveat}</p>`;
 }
 
 export function sideEffectSummary(
@@ -870,6 +943,39 @@ export function buildReportHtml(
     rows,
   );
 
+  // Recent trend: a dose-period-clamped tail average alongside the grand mean, so a precise-looking
+  // "Recent" figure never straddles two regimens and is never printed without its date span and
+  // adherence context (see docs/pending/08-rolling-average-trends.md).
+  const dates = rows.map((r) => r.date);
+  const recentDates = recentWindowDates(dates, doses, REPORT_RECENT_WINDOW);
+  const recentDateSet = new Set<IsoDate>(recentDates);
+  const recentRows = rows.filter((r) => recentDateSet.has(r.date));
+  const recentFromDate = recentDates[0];
+  const recentToDate = recentDates[recentDates.length - 1];
+  const recentAdherence = adherenceInWindow(recentRows);
+  const scaleAverages: readonly ScaleAverage[] = REPORT_RATING_ORDER.flatMap((key) => {
+    const metric = scaleMetricFor(key);
+    if (metric === undefined) return [];
+    const pick = ratingAccessor(isMorningRatingKey(key) ? 'morning' : 'evening', key);
+    const average = averageOf(rows, pick);
+    if (average === null) return []; // no data in range → omit
+    return [
+      {
+        label: metric.label,
+        direction: metric.direction,
+        average,
+        recentAverage: averageOf(recentRows, pick),
+      },
+    ];
+  });
+  const recentTrendSection = recentAverageSectionHtml(
+    scaleAverages,
+    REPORT_RECENT_WINDOW,
+    recentFromDate,
+    recentToDate,
+    recentAdherence,
+  );
+
   // Before/after each dose change that falls inside the range; windows reach outside it via entries.
   const beforeAfterSection = beforeAfterHtml(
     doses
@@ -1014,6 +1120,7 @@ export function buildReportHtml(
       ${doseTimeline}
       ${weeklySection}
       ${dosePeriodSection}
+      ${recentTrendSection}
       ${beforeAfterSection}
       ${adherenceSection}
       ${sideEffectsSection}

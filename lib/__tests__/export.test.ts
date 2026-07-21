@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { __setMockFileExists, __setMockPickedText } from '../__mocks__/expo-file-system';
 import {
+  adherenceInWindow,
   averageOf,
   beforeAfterDose,
   bucketByDosePeriod,
@@ -663,6 +664,53 @@ describe('buildReportHtml', () => {
     expect(html).toContain('.spark-line { display: inline-block; white-space: nowrap; }');
   });
 
+  it('renders the Recent trend section with a dated span and an adherence caveat', () => {
+    const rows = [
+      ...eveningDays('2026-07-01' as IsoDate, 7, 2), // grand mean pulled down by the early week
+      ...eveningDays('2026-07-08' as IsoDate, 6, 4), // 6 more days at mood/anxiety 4
+      morningRow('2026-07-14' as IsoDate, 3), // dose-taken morning on the range's last day
+    ];
+    const html = htmlFromRows(null, [], rows);
+    expect(html).toContain('<h2>Recent trend</h2>');
+    // grand mean over 13 rated days (7 days at 2, 6 days at 4 — day 14 has no evening rating)
+    // vs. the recent (last 7 days: 7/8–7/14) tail, whose 6 rated days average to 4.0.
+    expect(html).toContain('<td>2.9</td><td>4.0</td>');
+    expect(html).toContain('Recent (7-day avg) covers 2026-07-08–2026-07-14');
+    expect(html).toContain('Doses taken 1 of 1 logged mornings in this window');
+    expect(html).toContain('not a validated clinical score');
+  });
+
+  it('renders a null Recent tail as an em dash when the recent window has no data for a metric', () => {
+    const rows = [
+      ...eveningDays('2026-06-25' as IsoDate, 7, 3), // mood/anxiety logged only in the first week
+      { date: '2026-07-02' as IsoDate },
+      { date: '2026-07-03' as IsoDate },
+      { date: '2026-07-04' as IsoDate },
+      { date: '2026-07-05' as IsoDate },
+      { date: '2026-07-06' as IsoDate },
+      { date: '2026-07-07' as IsoDate },
+      { date: '2026-07-08' as IsoDate }, // last 7 days of the 14-day range have no evening entries
+    ];
+    const html = htmlFromRows(null, [], rows);
+    expect(html).toContain('<h2>Recent trend</h2>');
+    expect(html).toContain('<td>3.0</td><td>—</td>');
+  });
+
+  it('shifts the Recent span to start at a dose change inside the window', () => {
+    const rows = [
+      ...eveningDays('2026-06-25' as IsoDate, 10, 2), // 10 days before the dose change
+      ...eveningDays('2026-07-05' as IsoDate, 5, 4), // 5 days on/after it
+    ];
+    const doses: readonly DoseChange[] = [
+      { date: '2026-07-05' as IsoDate, dose: { amount: 40, unit: 'mg' } },
+    ];
+    const html = htmlFromRows(null, doses, rows);
+    // Without clamping, a 7-day window from the 2026-07-09 range end would start 2026-07-03 —
+    // inside the prior dose period. Clamped, it starts at the dose-change date instead.
+    expect(html).toContain('Recent (7-day avg) covers 2026-07-05–2026-07-09');
+    expect(html).toContain('<td>2.7</td><td>4.0</td>');
+  });
+
   it('renders a before/after table with a change arrow for a dose change inside the range', () => {
     const rows = [
       ...eveningDays('2026-07-01' as IsoDate, 4, 2), // before: mood 2
@@ -798,6 +846,25 @@ describe('computeAdherence', () => {
       notTakenDates: [DAY_3],
       noEntryDates: [DAY_2],
     });
+  });
+});
+
+describe('adherenceInWindow', () => {
+  it('counts doseTaken only over rows with a morning entry, excluding no-entry days', () => {
+    const rows: readonly DayEntry[] = [
+      morningRow(DAY_1, 3), // doseTaken true
+      { date: DAY_2 }, // no morning → excluded from both taken and logged
+      {
+        date: DAY_3,
+        morning: { ratings: {}, doseTaken: false, completedAt: isoTimestampNow() },
+      },
+    ];
+    expect(adherenceInWindow(rows)).toEqual({ taken: 1, logged: 2 });
+  });
+
+  it('reports taken === logged when every logged morning took the dose', () => {
+    const rows: readonly DayEntry[] = [morningRow(DAY_1, 3), morningRow(DAY_2, 4)];
+    expect(adherenceInWindow(rows)).toEqual({ taken: 2, logged: 2 });
   });
 });
 
