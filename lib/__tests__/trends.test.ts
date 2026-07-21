@@ -4,6 +4,7 @@ import {
   dosePeriodBoundaries,
   recentWindowDates,
   rollingAverage,
+  smoothedLineSegments,
 } from '../trends';
 import type { DoseChange, IsoDate, Rating } from '../types';
 
@@ -112,6 +113,45 @@ describe('recentWindowDates', () => {
 
   it('throws RangeError for window < 1', () => {
     expect(() => recentWindowDates([], [], 0)).toThrow(RangeError);
+  });
+});
+
+describe('smoothedLineSegments', () => {
+  it('connects two equal-height points with a flat, horizontal segment', () => {
+    const segments = smoothedLineSegments([3, 3], 10, 2, 48);
+    expect(segments).toHaveLength(1);
+    const segment = segments[0];
+    expect(segment).toBeDefined();
+    if (segment === undefined) return;
+    expect(segment.left).toBeCloseTo(5);
+    expect(segment.top).toBeCloseTo(16);
+    expect(segment.width).toBeCloseTo(12);
+    expect(segment.rotationDeg).toBeCloseTo(0);
+  });
+
+  it('tilts the segment to match a value change between points', () => {
+    const segments = smoothedLineSegments([2, 4], 10, 2, 48);
+    expect(segments).toHaveLength(1);
+    const segment = segments[0];
+    expect(segment).toBeDefined();
+    if (segment === undefined) return;
+    expect(segment.width).toBeCloseTo(20);
+    expect(segment.rotationDeg).toBeCloseTo(-53.13, 1);
+  });
+
+  it('breaks the line rather than bridging a null (empty-window) point', () => {
+    const segments = smoothedLineSegments([3, null, 3], 10, 2, 48);
+    expect(segments).toHaveLength(0);
+  });
+
+  it('produces one fewer segment than points when every pair is valid', () => {
+    const segments = smoothedLineSegments([2, 3, 4, 5], 10, 2, 48);
+    expect(segments).toHaveLength(3);
+  });
+
+  it('produces no segments for zero or one point', () => {
+    expect(smoothedLineSegments([], 10, 2, 48)).toHaveLength(0);
+    expect(smoothedLineSegments([3], 10, 2, 48)).toHaveLength(0);
   });
 });
 

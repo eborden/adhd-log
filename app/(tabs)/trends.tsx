@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { LayoutChangeEvent } from 'react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusLoad } from '../../hooks/useFocusLoad';
 import { coverage, loggingStartDate, ratingAccessor, rowsInRange } from '../../lib/export';
@@ -12,7 +13,12 @@ import {
   todayIsoDate,
 } from '../../lib/storage';
 import { radius, ratingColor, space, typography, useTheme } from '../../lib/theme';
-import { defaultWindowForRange, dosePeriodBoundaries, rollingAverage } from '../../lib/trends';
+import {
+  defaultWindowForRange,
+  dosePeriodBoundaries,
+  rollingAverage,
+  smoothedLineSegments,
+} from '../../lib/trends';
 import type {
   DayEntry,
   DoseChange,
@@ -24,6 +30,15 @@ import type {
 } from '../../lib/types';
 
 const RANGE_OPTIONS = [7, 14, 30] as const;
+
+// Shared with the geometry in lib/trends.ts's `smoothedLineSegments` — both the raw bars and the
+// smoothed line must agree on the row's pixel height and the gap between columns.
+const BARS_ROW_HEIGHT = 48;
+const COLUMN_GAP = 2;
+const SMOOTHED_LINE_THICKNESS = 2;
+// Raw bars dim (rather than disappear) while smoothing is on, so the line reads as the primary
+// trend signal without erasing an acute single-day spike — the data always survives in the bar.
+const DIMMED_BAR_OPACITY = 0.85;
 
 interface TaggedMetric {
   readonly metric: Metric;
@@ -50,15 +65,11 @@ function barHeight(rating: Rating): number {
   return 8 + rating * 8;
 }
 
-/** Smoothed-dot height: reuses the raw bar mapping, but on a plain number (not a Rating). */
-function smoothedHeight(value: number | null): number | null {
-  return value === null ? null : 8 + value * 8;
-}
-
 export default function Trends() {
   const theme = useTheme();
   const [range, setRange] = useState<number>(14);
   const [smoothingOn, setSmoothingOn] = useState<boolean>(true);
+  const [barsRowWidth, setBarsRowWidth] = useState<number>(0);
 
   const { data } = useFocusLoad<TrendsData>(
     async () => {
@@ -83,6 +94,14 @@ export default function Trends() {
   const since = profile ? loggingStartDate(profile) : undefined;
   const smoothingWindow = defaultWindowForRange(range);
   const boundaries = dosePeriodBoundaries(dates, doses);
+  // Every metric block renders a same-width barsRow (same ScrollView content width, same
+  // padding), so one measurement is reused everywhere rather than re-measuring per block.
+  const columnWidth =
+    rows.length === 0 ? 0 : (barsRowWidth - COLUMN_GAP * (rows.length - 1)) / rows.length;
+
+  function handleBarsRowLayout(event: LayoutChangeEvent): void {
+    setBarsRowWidth(event.nativeEvent.layout.width);
+  }
 
   const visibleScaleMetrics: readonly TaggedMetric[] = [
     ...MORNING_METRICS.filter((metric) => metric.kind === 'scale').map((metric) => ({
@@ -141,12 +160,16 @@ export default function Trends() {
         </Pressable>
       </View>
 
-      {visibleScaleMetrics.map(({ metric, session }) => {
+      {visibleScaleMetrics.map(({ metric, session }, blockIndex) => {
         if (metric.kind !== 'scale') return null;
         const accessor = ratingAccessor(session, metric.key);
         const cov = coverage(rows, accessor, since);
         const values = rows.map((row) => accessor(row));
         const smoothed = smoothingOn ? rollingAverage(values, smoothingWindow, boundaries) : null;
+        const segments =
+          smoothed !== null && columnWidth > 0
+            ? smoothedLineSegments(smoothed, columnWidth, COLUMN_GAP, BARS_ROW_HEIGHT)
+            : [];
         return (
           <View key={`${session}-${metric.key}`} style={styles.metricBlock}>
             <Text style={[typography.sectionLabel, styles.metricLabel, { color: theme.textMuted }]}>
@@ -156,7 +179,10 @@ export default function Trends() {
               logged {cov.logged} of {cov.total} days
             </Text>
             <View style={styles.barsRowWrapper}>
-              <View style={styles.barsRow}>
+              <View
+                style={styles.barsRow}
+                onLayout={blockIndex === 0 ? handleBarsRowLayout : undefined}
+              >
                 {rows.map((row, index) => {
                   const rating = accessor(row);
                   return (
@@ -170,6 +196,7 @@ export default function Trends() {
                             {
                               height: barHeight(rating),
                               backgroundColor: ratingColor(theme, rating, metric.direction),
+                              opacity: smoothingOn ? DIMMED_BAR_OPACITY : 1,
                             },
                           ]}
                         />
@@ -178,22 +205,22 @@ export default function Trends() {
                   );
                 })}
               </View>
-              <View style={styles.smoothOverlayRow} pointerEvents="none">
-                {dates.map((date, index) => {
-                  const dotHeight = smoothedHeight(smoothed?.[index] ?? null);
-                  return (
-                    <View key={date} style={styles.barColumn}>
-                      {dotHeight === null ? null : (
-                        <View
-                          style={[
-                            styles.smoothedDot,
-                            { bottom: dotHeight, backgroundColor: theme.accent },
-                          ]}
-                        />
-                      )}
-                    </View>
-                  );
-                })}
+              <View style={styles.smoothedLineLayer} pointerEvents="none">
+                {segments.map((segment, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.smoothedLineSegment,
+                      {
+                        left: segment.left,
+                        top: segment.top - SMOOTHED_LINE_THICKNESS / 2,
+                        width: segment.width,
+                        backgroundColor: theme.accent,
+                        transform: [{ rotate: `${String(segment.rotationDeg)}deg` }],
+                      },
+                    ]}
+                  />
+                ))}
               </View>
             </View>
             <View style={styles.markersRow}>
@@ -250,17 +277,20 @@ const styles = StyleSheet.create({
   barsRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    height: 48,
-    gap: 2,
+    height: BARS_ROW_HEIGHT,
+    gap: COLUMN_GAP,
   },
-  smoothOverlayRow: {
+  smoothedLineLayer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    flexDirection: 'row',
-    gap: 2,
+  },
+  smoothedLineSegment: {
+    position: 'absolute',
+    height: SMOOTHED_LINE_THICKNESS,
+    borderRadius: SMOOTHED_LINE_THICKNESS / 2,
   },
   barColumn: {
     flex: 1,
@@ -277,12 +307,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderStyle: 'dashed',
     backgroundColor: 'transparent',
-  },
-  smoothedDot: {
-    position: 'absolute',
-    width: 4,
-    height: 4,
-    borderRadius: radius.pill,
   },
   markersRow: {
     flexDirection: 'row',

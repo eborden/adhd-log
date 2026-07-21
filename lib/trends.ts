@@ -98,3 +98,54 @@ export type SmoothingWindow = (typeof SMOOTHING_WINDOWS)[number];
 export function defaultWindowForRange(rangeDays: number): SmoothingWindow {
   return rangeDays <= 7 ? 3 : 7;
 }
+
+/**
+ * A straight segment between two adjacent smoothed points, described as a `View`-friendly
+ * rectangle: rendered at `(left, top)` with `width` and rotated `rotationDeg` around its own
+ * center — the standard RN "draw a line between two points" technique (no SVG/canvas
+ * dependency). `top`/`left` mark the segment's center; the renderer offsets by half its own
+ * line thickness, which is a style concern, not a geometry one.
+ */
+export interface LineSegment {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly rotationDeg: number;
+}
+
+/**
+ * Connects consecutive non-null `smoothed` points into line segments, so the overlay reads as
+ * one continuous trend line rather than a scatter of per-day dots. Columns are assumed to be
+ * `columnWidth`-wide separated by `gap`, matching the raw bars' row layout; `rowHeight` maps a
+ * value the same way the raw bars do (`8 + value * 8`), so the line tracks the same vertical
+ * scale. A `null` on either end of a pair (an empty smoothing window) breaks the line rather
+ * than interpolating across it — skipping data is honest; inventing a bridge is not.
+ */
+export function smoothedLineSegments(
+  smoothed: readonly SmoothedValue[],
+  columnWidth: number,
+  gap: number,
+  rowHeight: number,
+): readonly LineSegment[] {
+  const centerX = (index: number): number => index * (columnWidth + gap) + columnWidth / 2;
+  const pointY = (value: number): number => rowHeight - (8 + value * 8);
+  const segments: LineSegment[] = [];
+  for (let i = 0; i < smoothed.length - 1; i += 1) {
+    const a = smoothed[i]; // SmoothedValue | undefined
+    const b = smoothed[i + 1];
+    if (a === null || a === undefined || b === null || b === undefined) continue;
+    const ax = centerX(i);
+    const ay = pointY(a);
+    const bx = centerX(i + 1);
+    const by = pointY(b);
+    const dx = bx - ax;
+    const dy = by - ay;
+    segments.push({
+      left: (ax + bx) / 2 - Math.sqrt(dx * dx + dy * dy) / 2,
+      top: (ay + by) / 2,
+      width: Math.sqrt(dx * dx + dy * dy),
+      rotationDeg: (Math.atan2(dy, dx) * 180) / Math.PI,
+    });
+  }
+  return segments;
+}
