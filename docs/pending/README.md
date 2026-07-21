@@ -5,8 +5,9 @@ one number line so they never collide:
 
 - **Architecture / correctness (01–05)** — distilled from the architecture expert-panel review
   (2026-07-18). Fix confirmed data-loss paths and make the codebase's own contracts true.
-- **User-value / features (06–16)** — distilled from the user-value analysis (2026-07-18) and
-  each run through a 4-expert design-review panel (see "How the 06–16 docs were produced").
+- **User-value / features (06–20)** — 06–16 distilled from the user-value analysis (2026-07-18);
+  17–20 distilled from the titration-log research (2026-07-21, `docs/research/titration-log-examples.md`).
+  Each run through the same 4-expert design-review panel (see "How the docs were produced").
 
 Do them roughly in numbered order within each track. The architecture track (01–05) generally
 comes first: several feature docs assume the schema-driven write path (02), tolerant parsing
@@ -32,24 +33,29 @@ Landed plans move to `docs/DECISIONS.md` and are struck through here.
 Priority = value ÷ effort within the mission (**collect → log → provider**), P1 before P2.
 Each doc references its source item in the user-value analysis.
 
-| #   | Plan                                                                      | Priority | Why it matters                                                                                                                                |
-| --- | ------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| 06  | ~~Provider report overhaul~~ ✅ landed (see DECISIONS)                    | **P1**   | The report is the deliverable: per-period & before/after-dose averages, adherence, side-effect summary, notes, sparklines, a 20-second cover  |
-| 07  | [Confounder / context tags](07-confounder-context-tags.md)                | **P1**   | Optional one-tap evening tags so the provider can discount confounded days — the biggest lever on signal quality                              |
-| 08  | ~~Rolling-average trend smoothing~~ ✅ landed (see DECISIONS)             | **P1**   | 7-day smoothing makes the weeks-long trend visible under day-to-day noise                                                                     |
-| 09  | ~~Trend data honesty: coverage + gaps~~ ✅ landed (see DECISIONS)         | **P1**   | "Logged 22 of 30 days" coverage caption + unambiguous gap rendering on the in-app Trends surface; report-side denominator moved to 16         |
-| 10  | ~~Side-effect severity & onset~~ ✅ landed (see DECISIONS)                | **P1**   | Severity + first-appearance turns a checkbox into a real push-through-or-change input                                                         |
-| 11  | [Visit anchoring & "since last visit"](11-visit-anchoring.md)             | **P1**   | Record appointments → report defaults to "since last visit" + pre-visit nudge; ties the loop to the care rhythm                               |
-| 12  | [Dose adherence & timing](12-dose-adherence-timing.md)                    | P2       | taken/late/missed (+ time) instead of a boolean; adherence % feeds the report                                                                 |
-| 13  | [Weekly global-impression check-in](13-weekly-global-impression.md)       | P2       | A lightweight weekly PGI-C-style "vs last week: better/same/worse" — a global-change signal clinicians use                                    |
-| 14  | [Baseline capture at medication start](14-baseline-capture.md)            | P2       | A pre-start snapshot so current-vs-baseline deltas are legible                                                                                |
-| 15  | [Check-in friction reducers](15-checkin-friction-reducers.md)             | P2       | "Same as yesterday" prefill + notification quick-actions/snooze — protect the completion rate every trend depends on                          |
-| 16  | [Before/after dose-change comparison](16-before-after-dose-comparison.md) | P2       | Rescoped: report section shipped in 06 — remaining is surfacing sample-size + adherence beside each mean, plus the unbuilt in-app Trends view |
+| #   | Plan                                                                      | Priority | Why it matters                                                                                                                                                  |
+| --- | ------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 06  | ~~Provider report overhaul~~ ✅ landed (see DECISIONS)                    | **P1**   | The report is the deliverable: per-period & before/after-dose averages, adherence, side-effect summary, notes, sparklines, a 20-second cover                    |
+| 07  | [Confounder / context tags](07-confounder-context-tags.md)                | **P1**   | Optional one-tap evening tags so the provider can discount confounded days — the biggest lever on signal quality                                                |
+| 08  | ~~Rolling-average trend smoothing~~ ✅ landed (see DECISIONS)             | **P1**   | 7-day smoothing makes the weeks-long trend visible under day-to-day noise                                                                                       |
+| 09  | ~~Trend data honesty: coverage + gaps~~ ✅ landed (see DECISIONS)         | **P1**   | "Logged 22 of 30 days" coverage caption + unambiguous gap rendering on the in-app Trends surface; report-side denominator moved to 16                           |
+| 10  | ~~Side-effect severity & onset~~ ✅ landed (see DECISIONS)                | **P1**   | Severity + first-appearance turns a checkbox into a real push-through-or-change input                                                                           |
+| 11  | [Visit anchoring & "since last visit"](11-visit-anchoring.md)             | **P1**   | Record appointments → report defaults to "since last visit" + pre-visit nudge; ties the loop to the care rhythm                                                 |
+| 12  | [Dose adherence & timing](12-dose-adherence-timing.md)                    | P2       | taken/late/missed (+ time) instead of a boolean; adherence % feeds the report                                                                                   |
+| 13  | [Weekly global-impression check-in](13-weekly-global-impression.md)       | P2       | A lightweight weekly PGI-C-style "vs last week: better/same/worse" — a global-change signal clinicians use                                                      |
+| 14  | [Baseline capture at medication start](14-baseline-capture.md)            | P2       | A pre-start snapshot so current-vs-baseline deltas are legible                                                                                                  |
+| 15  | [Check-in friction reducers](15-checkin-friction-reducers.md)             | P2       | "Same as yesterday" prefill + notification quick-actions/snooze — protect the completion rate every trend depends on                                            |
+| 16  | [Before/after dose-change comparison](16-before-after-dose-comparison.md) | P2       | Rescoped: report section shipped in 06 — remaining is surfacing sample-size + adherence beside each mean, plus the unbuilt in-app Trends view                   |
+| 17  | [Objective measurements (BP · HR · weight)](17-objective-measurements.md) | **P1**   | The titration anchor the target alpha-agonists/atomoxetine actually turn on; separate episodic store, descriptive only — the biggest gap the log research found |
+| 18  | [Dose-change trigger (the "why")](18-dose-change-trigger.md)              | **P1**   | One optional field capturing the user's reason per step; direction derived — turns the report's dose list into the titration narrative a prescriber reads       |
+| 19  | [Titration onset context](19-titration-onset-context.md)                  | P2       | "Day/Week N on current dose" + honest "effects build over weeks" framing — reframes an early flat trend as expected, not failure; nothing persisted             |
+| 20  | [Combination / adjunct medication](20-combination-medication.md)          | P3       | Decision doc: ship single-med honesty copy now (Option A), hold the pre-designed optional-adjunct expansion (Option B), reject a full N-med manager (C)         |
 
-### How the 06–16 docs were produced
+### How the 06–20 docs were produced
 
 Each was drafted against this repo's real symbols/seams, then reviewed by a 4-lens expert
-panel before landing here:
+panel before landing here (17–20 followed the identical process on 2026-07-21, sourced from
+`docs/research/titration-log-examples.md`; all four returned approve / approve-with-changes):
 
 1. **Clinical / behavioral-health measurement** — is the captured data actually usable by a
    prescriber for non-stimulant titration, and does it stay descriptive (never advice)?
@@ -60,7 +66,7 @@ panel before landing here:
    re-onboarding, migrate-on-read for changed shapes, 100% on-device, no scope creep into advice.
 
 Every doc ends with a **## Panel review** section recording each lens's verdict and what
-changed. All 06–16 came back `approve` / `approve-with-changes` (no rejects); must-fixes were
+changed. All 06–20 came back `approve` / `approve-with-changes` (no rejects); must-fixes were
 applied before commit.
 
 ## Ground rules that apply to every plan
