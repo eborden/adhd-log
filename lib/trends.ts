@@ -81,9 +81,8 @@ export function recentWindowDates(
   }
   const doseDates = new Set<IsoDate>(doses.map((dc) => dc.date));
   let periodStart = 0;
-  for (let i = 0; i < dates.length; i += 1) {
-    const d = dates[i]; // IsoDate | undefined
-    if (d !== undefined && doseDates.has(d)) {
+  for (const [i, d] of dates.entries()) {
+    if (doseDates.has(d)) {
       periodStart = i;
     }
   }
@@ -130,22 +129,27 @@ export function smoothedLineSegments(
   const centerX = (index: number): number => index * (columnWidth + gap) + columnWidth / 2;
   const pointY = (value: number): number => rowHeight - (8 + value * 8);
   const segments: LineSegment[] = [];
-  for (let i = 0; i < smoothed.length - 1; i += 1) {
-    const a = smoothed[i]; // SmoothedValue | undefined
-    const b = smoothed[i + 1];
-    if (a === null || a === undefined || b === null || b === undefined) continue;
-    const ax = centerX(i);
-    const ay = pointY(a);
-    const bx = centerX(i + 1);
-    const by = pointY(b);
-    const dx = bx - ax;
-    const dy = by - ay;
-    segments.push({
-      left: (ax + bx) / 2 - Math.sqrt(dx * dx + dy * dy) / 2,
-      top: (ay + by) / 2,
-      width: Math.sqrt(dx * dx + dy * dy),
-      rotationDeg: (Math.atan2(dy, dx) * 180) / Math.PI,
-    });
+  let prev: { readonly index: number; readonly value: number } | undefined;
+  for (const [index, value] of smoothed.entries()) {
+    if (value === null) {
+      prev = undefined;
+      continue;
+    }
+    if (prev !== undefined) {
+      const ax = centerX(prev.index);
+      const ay = pointY(prev.value);
+      const bx = centerX(index);
+      const by = pointY(value);
+      const dx = bx - ax;
+      const dy = by - ay;
+      segments.push({
+        left: (ax + bx) / 2 - Math.sqrt(dx * dx + dy * dy) / 2,
+        top: (ay + by) / 2,
+        width: Math.sqrt(dx * dx + dy * dy),
+        rotationDeg: (Math.atan2(dy, dx) * 180) / Math.PI,
+      });
+    }
+    prev = { index, value };
   }
   return segments;
 }

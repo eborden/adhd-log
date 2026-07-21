@@ -37,26 +37,11 @@ export interface PeriodBucket {
   readonly evening: ReadonlyMap<EveningRatingKey, MetricAverage>;
 }
 
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const;
+const SHORT_DATE_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
 
 /** "Jul 7" — a compact month-day label for bucket titles. */
 function shortDate(date: IsoDate): string {
-  const parsed = parseIsoDate(date);
-  const month = MONTHS[parsed.getMonth()];
-  return `${month ?? ''} ${String(parsed.getDate())}`;
+  return SHORT_DATE_FORMAT.format(parseIsoDate(date));
 }
 
 /** Averages every rating key over a bucket's rows into the narrowed morning/evening maps. */
@@ -122,20 +107,24 @@ export function bucketByDosePeriod(
   const cuts = sorted
     .map((change) => change.date)
     .filter((date) => date.localeCompare(rangeStart) > 0 && date.localeCompare(rangeEnd) <= 0);
-  const segmentStarts: readonly IsoDate[] = [rangeStart, ...cuts];
+  // A trailing sentinel one day past rangeEnd means every segment's end is `addDays(next, -1)` —
+  // the last segment's end folds out to rangeEnd itself, with no separate branch for it.
+  const boundaries: readonly IsoDate[] = [rangeStart, ...cuts, addDays(rangeEnd, 1)];
   const buckets: PeriodBucket[] = [];
-  for (let i = 0; i < segmentStarts.length; i += 1) {
-    const dispStart = segmentStarts[i];
-    if (dispStart === undefined) continue;
-    const nextStart = segmentStarts[i + 1];
-    const dispEnd = nextStart === undefined ? rangeEnd : addDays(nextStart, -1);
-    const active = lastChangeOnOrBefore(sorted, dispStart);
-    const dataStart =
-      active !== undefined && active.date.localeCompare(dispStart) < 0 ? active.date : dispStart;
-    const doseLabel = active === undefined ? 'No dose recorded' : formatDose(active.dose);
-    const label = `${doseLabel} (${shortDate(dataStart)}–${shortDate(dispEnd)})`;
-    const bucketRows = rowsInRange(entries, datesInRange(dataStart, dispEnd));
-    buckets.push(makeBucket(label, dataStart, dispEnd, bucketRows));
+  let prevBoundary: IsoDate | undefined;
+  for (const boundary of boundaries) {
+    if (prevBoundary !== undefined) {
+      const dispStart = prevBoundary;
+      const dispEnd = addDays(boundary, -1);
+      const active = lastChangeOnOrBefore(sorted, dispStart);
+      const dataStart =
+        active !== undefined && active.date.localeCompare(dispStart) < 0 ? active.date : dispStart;
+      const doseLabel = active === undefined ? 'No dose recorded' : formatDose(active.dose);
+      const label = `${doseLabel} (${shortDate(dataStart)}–${shortDate(dispEnd)})`;
+      const bucketRows = rowsInRange(entries, datesInRange(dataStart, dispEnd));
+      buckets.push(makeBucket(label, dataStart, dispEnd, bucketRows));
+    }
+    prevBoundary = boundary;
   }
   return buckets;
 }
@@ -306,6 +295,7 @@ export function sideEffectSummary(
       lastInRange: IsoDate;
       days: number;
       sev: SideEffectSeverity[];
+      latestSeverity: SideEffectSeverity;
       migrated: boolean;
     }
   >();
@@ -323,20 +313,20 @@ export function sideEffectSummary(
           lastInRange: row.date,
           days: 1,
           sev: [detail.severity],
+          latestSeverity: detail.severity,
           migrated,
         });
       } else {
         cur.lastInRange = row.date;
         cur.days += 1;
         cur.sev.push(detail.severity);
+        cur.latestSeverity = detail.severity;
         if (migrated) cur.migrated = true;
       }
     }
   }
   const out: SideEffectSummaryRow[] = [];
   for (const [effect, d] of acc) {
-    const latest = d.sev[d.sev.length - 1];
-    if (latest === undefined) continue; // unreachable: seeded with one
     const onsetDate = onset.get(effect) ?? d.firstInRange;
     out.push({
       effect,
@@ -350,7 +340,7 @@ export function sideEffectSummary(
       daysReported: d.days,
       loggedEveningsInRange: loggedEvenings,
       severityRun: severityRunLength(d.sev),
-      latestSeverity: latest,
+      latestSeverity: d.latestSeverity,
       hasMigratedDays: d.migrated,
     });
   }
