@@ -38,7 +38,7 @@ const COLUMN_GAP = 2;
 const SMOOTHED_LINE_THICKNESS = 2;
 // Raw bars dim (rather than disappear) while smoothing is on, so the line reads as the primary
 // trend signal without erasing an acute single-day spike — the data always survives in the bar.
-const DIMMED_BAR_OPACITY = 0.85;
+const DIMMED_BAR_OPACITY = 0.2;
 
 interface TaggedMetric {
   readonly metric: Metric;
@@ -68,7 +68,7 @@ function barHeight(rating: Rating): number {
 export default function Trends() {
   const theme = useTheme();
   const [range, setRange] = useState<number>(14);
-  const [smoothingOn, setSmoothingOn] = useState<boolean>(true);
+  const [smoothingOn, setSmoothingOn] = useState<boolean>(false);
   const [barsRowWidth, setBarsRowWidth] = useState<number>(0);
 
   const { data } = useFocusLoad<TrendsData>(
