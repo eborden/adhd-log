@@ -10,6 +10,7 @@ import { buildBackup } from '../../lib/backup';
 import { parseDoseAmount } from '../../lib/checkin';
 import { exportJsonBackup, exportPdfReport, importJsonBackup } from '../../lib/export';
 import { DEFAULT_REPORT_OPTIONS, buildReportHtml } from '../../lib/report-html';
+import { formatDose } from '../../lib/report-metrics';
 import { requestNotificationPermissions, scheduleReminders } from '../../lib/notifications';
 import {
   EVENING_METRICS,
@@ -177,8 +178,8 @@ export default function Settings() {
       <Card style={styles.section}>
         <Text style={[typography.cardTitle, { color: theme.text }]}>{currentProfile.medName}</Text>
         <Text style={[typography.caption, styles.caption, { color: theme.textMuted }]}>
-          Current dose: {currentProfile.currentDose.amount}
-          {currentProfile.currentDose.unit} · started {currentProfile.startDate}
+          Current dose: {formatDose(currentProfile.currentDose)} · started{' '}
+          {currentProfile.startDate}
         </Text>
 
         <Text style={[typography.bodyStrong, styles.fieldLabel, { color: theme.text }]}>
@@ -222,8 +223,7 @@ export default function Settings() {
                   key={`${change.date}-${String(change.dose.amount)}`}
                   style={[typography.caption, { color: theme.textMuted }]}
                 >
-                  {change.date}: {change.dose.amount}
-                  {change.dose.unit}
+                  {change.date}: {formatDose(change.dose)}
                   {change.note !== undefined ? ` — ${change.note}` : ''}
                 </Text>
               ))}
