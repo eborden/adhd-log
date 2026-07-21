@@ -51,3 +51,6 @@ coverage/
 
 # signing secrets (keystore + passwords) — never commit
 credentials/
+
+# Context+ MCP server data
+.mcp_data/
