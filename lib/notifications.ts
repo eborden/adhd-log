@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import { isRunningInExpoGo } from 'expo';
 import type { EventSubscription } from 'expo-modules-core';
 import type * as Notifications from 'expo-notifications';
+import { isSession } from './storage';
 import type { Profile, Session, TimeOfDay } from './types';
 
 type NotificationsModule = typeof Notifications;
@@ -103,10 +104,6 @@ export async function scheduleReminders(profile: Profile): Promise<void> {
     'Evening check-in',
     'Take a minute to log today before you wind down.',
   );
-}
-
-function isSession(value: unknown): value is Session {
-  return value === 'morning' || value === 'evening';
 }
 
 /** Extracts which check-in session a tapped notification should deep-link to. */

@@ -30,6 +30,7 @@ import { EVENING_METRICS, MORNING_METRICS, enabledEveningMetricKeys } from '../l
 import {
   isEveningRatingKey,
   isIsoDate,
+  isSession,
   isoTimestampNow,
   loadEntries,
   loadProfile,
@@ -39,10 +40,6 @@ import {
 import { radius, space, typography, useTheme } from '../lib/theme';
 import { assertNever } from '../lib/types';
 import type { IsoDate, Metric, Profile, Session } from '../lib/types';
-
-function isSession(value: string | undefined): value is Session {
-  return value === 'morning' || value === 'evening';
-}
 
 export default function Checkin() {
   const theme = useTheme();

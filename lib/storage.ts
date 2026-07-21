@@ -23,6 +23,7 @@ import {
   type Profile,
   type Rating,
   type RatingKey,
+  type Session,
   type SideEffect,
   type SideEffectDetail,
   type SideEffectReports,
@@ -81,6 +82,10 @@ export function isEveningRatingKey(value: unknown): value is EveningRatingKey {
 
 export function isMorningRatingKey(value: unknown): value is MorningRatingKey {
   return typeof value === 'string' && (MORNING_RATING_KEYS as readonly string[]).includes(value);
+}
+
+export function isSession(value: unknown): value is Session {
+  return value === 'morning' || value === 'evening';
 }
 
 export function isTimeOfDay(value: unknown): value is TimeOfDay {
@@ -207,16 +212,6 @@ export function parseEveningCheckin(value: unknown): EveningCheckin | undefined 
   };
 }
 
-/**
- * Validity check ONLY. A `true` result does NOT mean `value` already has the new shape
- * (legacy string[] side effects also validate). Never narrow-and-return the raw value; only
- * `parseEveningCheckin` mints an `EveningCheckin`. Returns boolean by design — a
- * `value is EveningCheckin` predicate would be a lie for legacy input.
- */
-export function isEveningCheckin(value: unknown): boolean {
-  return parseEveningCheckin(value) !== undefined;
-}
-
 /** Validates AND normalizes a day entry — the sole minter of `DayEntry` alongside the callers below. */
 export function parseDayEntry(value: unknown): DayEntry | undefined {
   if (!isRecord(value) || !isIsoDate(value['date'])) return undefined;
@@ -238,11 +233,6 @@ export function parseDayEntry(value: unknown): DayEntry | undefined {
     ...(morning !== undefined ? { morning } : {}),
     ...(evening !== undefined ? { evening } : {}),
   };
-}
-
-/** Validity check ONLY — like `isEveningCheckin`, never the value path. */
-export function isDayEntry(value: unknown): boolean {
-  return parseDayEntry(value) !== undefined;
 }
 
 // ---------------------------------------------------------------------------

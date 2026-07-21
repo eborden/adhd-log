@@ -10,9 +10,7 @@ import {
   doseChangeMarkers,
   firstOnsetDates,
   formatIsoDate,
-  isDayEntry,
   isDoseChangeList,
-  isEveningCheckin,
   isEveningRatingKey,
   isIsoDate,
   isIsoTimestamp,
@@ -150,64 +148,6 @@ describe('isProfile', () => {
 
   it('rejects a profile whose enabledEveningMetrics contains a non-string element', () => {
     expect(isProfile({ ...VALID_PROFILE, enabledEveningMetrics: ['mood', 1] })).toBe(false);
-  });
-});
-
-describe('isDayEntry', () => {
-  const validEntry = {
-    date: '2026-07-17',
-    morning: {
-      ratings: { sleepQuality: 4, wakingMood: 3 },
-      doseTaken: true,
-      completedAt: '2026-07-17T07:00:00.000Z',
-    },
-  };
-
-  it('accepts a day entry with only a morning session', () => {
-    expect(isDayEntry(validEntry)).toBe(true);
-  });
-
-  it('rejects a day entry with a malformed morning session', () => {
-    expect(
-      isDayEntry({
-        ...validEntry,
-        morning: { ...validEntry.morning, ratings: { sleepQuality: 9 } },
-      }),
-    ).toBe(false);
-  });
-});
-
-describe('isEveningCheckin', () => {
-  it('accepts a checkin with only some ratings present', () => {
-    expect(
-      isEveningCheckin({
-        ratings: { mood: 4, focus: 3 },
-        sideEffects: [],
-        completedAt: '2026-07-17T20:00:00.000Z',
-      }),
-    ).toBe(true);
-  });
-
-  it('accepts a checkin with no ratings at all', () => {
-    expect(
-      isEveningCheckin({ ratings: {}, sideEffects: [], completedAt: '2026-07-17T20:00:00.000Z' }),
-    ).toBe(true);
-  });
-
-  it('rejects a checkin where a present rating is invalid', () => {
-    expect(
-      isEveningCheckin({
-        ratings: { mood: 9 },
-        sideEffects: [],
-        completedAt: '2026-07-17T20:00:00.000Z',
-      }),
-    ).toBe(false);
-  });
-
-  it('rejects a checkin missing the ratings record entirely', () => {
-    expect(isEveningCheckin({ sideEffects: [], completedAt: '2026-07-17T20:00:00.000Z' })).toBe(
-      false,
-    );
   });
 });
 
