@@ -14,7 +14,8 @@
  * and the exported backup JSON are byte-reproducible; those fields are not shown in the report
  * anyway. See `lib/__tests__/scenarios.test.ts`, which pins each scenario's HTML + backup JSON.
  */
-import type { Backup, ReportOptions } from '../export';
+import type { Backup } from '../backup';
+import type { ReportOptions } from '../report-html';
 import type {
   DayEntry,
   Dose,

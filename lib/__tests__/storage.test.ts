@@ -35,8 +35,8 @@ import {
   saveProfile,
   todayIsoDate,
 } from '../storage';
-import { buildBackup } from '../export';
-import type { Backup } from '../export';
+import { buildBackup } from '../backup';
+import type { Backup } from '../backup';
 import type { DayEntry, DoseChange, IsoDate, Profile } from '../types';
 
 const VALID_PROFILE = {

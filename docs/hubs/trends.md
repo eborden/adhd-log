@@ -19,7 +19,7 @@ and resetting the smoothing window at each dose change.
 
 ## Data it reads
 
-- [[lib/export.ts]] — `rowsInRange`, `ratingAccessor`, `coverage`, `loggingStartDate`
+- [[lib/metrics.ts]] — `rowsInRange`, `ratingAccessor`, `coverage`, `loggingStartDate`
 - [[lib/storage.ts]] — `loadEntries` / `loadDoseChanges` / `loadProfile`,
   `doseChangeMarkers`, `lastNDates`, `todayIsoDate`
 - [[lib/schema.ts]] — `MORNING_METRICS` / `EVENING_METRICS` (which metrics to chart)

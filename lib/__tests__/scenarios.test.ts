@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { DEFAULT_REPORT_OPTIONS, buildReportHtml } from '../export';
+import { DEFAULT_REPORT_OPTIONS, buildReportHtml } from '../report-html';
 import { SCENARIOS, scenarioBackup } from '../__fixtures__/scenarios';
 
 /**

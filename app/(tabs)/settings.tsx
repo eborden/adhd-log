@@ -6,15 +6,10 @@ import { DoseInput } from '../../components/DoseInput';
 import { Stepper } from '../../components/Stepper';
 import { Toggle } from '../../components/Toggle';
 import { useFocusLoad } from '../../hooks/useFocusLoad';
+import { buildBackup } from '../../lib/backup';
 import { parseDoseAmount } from '../../lib/checkin';
-import {
-  DEFAULT_REPORT_OPTIONS,
-  buildBackup,
-  buildReportHtml,
-  exportJsonBackup,
-  exportPdfReport,
-  importJsonBackup,
-} from '../../lib/export';
+import { exportJsonBackup, exportPdfReport, importJsonBackup } from '../../lib/export';
+import { DEFAULT_REPORT_OPTIONS, buildReportHtml } from '../../lib/report-html';
 import { requestNotificationPermissions, scheduleReminders } from '../../lib/notifications';
 import {
   EVENING_METRICS,

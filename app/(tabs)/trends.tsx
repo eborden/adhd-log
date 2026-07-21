@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusLoad } from '../../hooks/useFocusLoad';
-import { coverage, loggingStartDate, ratingAccessor, rowsInRange } from '../../lib/export';
+import { coverage, loggingStartDate, ratingAccessor, rowsInRange } from '../../lib/metrics';
 import { EVENING_METRICS, MORNING_METRICS } from '../../lib/schema';
 import {
   doseChangeMarkers,

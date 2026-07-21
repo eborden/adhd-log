@@ -2,7 +2,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../components/Card';
 import { useFocusLoad } from '../../hooks/useFocusLoad';
-import { ratingAccessor } from '../../lib/export';
+import { ratingAccessor } from '../../lib/metrics';
 import {
   EVENING_METRICS,
   MORNING_METRICS,

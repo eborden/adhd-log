@@ -1,47 +1,8 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Directory, File, Paths } from 'expo-file-system';
-import { buildBackup, parseBackup, type Backup } from './backup';
+import { parseBackup, type Backup } from './backup';
 import type { Parsed } from './types';
-
-export { buildBackup, parseBackup, type Backup };
-export {
-  averageOf,
-  computeTrend,
-  coverage,
-  loggingStartDate,
-  metricAverage,
-  ratingAccessor,
-  rowsInRange,
-  type Coverage,
-  type MetricAverage,
-  type MetricTrend,
-} from './metrics';
-export {
-  adherenceInWindow,
-  bucketByDosePeriod,
-  bucketByWeek,
-  beforeAfterDose,
-  collectNotes,
-  computeAdherence,
-  severityRunLength,
-  sideEffectSummary,
-  type AdherenceSummary,
-  type BeforeAfter,
-  type DatedNote,
-  type PeriodBucket,
-  type ScaleAverage,
-  type SideEffectSummaryRow,
-} from './report-metrics';
-export {
-  buildReportHtml,
-  DEFAULT_REPORT_OPTIONS,
-  dailyLogCell,
-  dailyLogColumns,
-  dailyLogHasValue,
-  REPORT_RECENT_WINDOW,
-  type ReportOptions,
-} from './report-html';
 
 // ---------------------------------------------------------------------------
 // Native I/O — PDF print/share and JSON backup export/import.
