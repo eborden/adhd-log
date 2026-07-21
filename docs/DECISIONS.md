@@ -3,6 +3,44 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Rolling-average trend smoothing (2026-07-21)
+
+**Problem:** Raw daily 1–5 ratings are noisy enough to hide the weeks-long drift the app
+exists to surface — both on `app/(tabs)/trends.tsx`'s daily bars and in the PDF report's
+per-period averages. A naive trailing mean would also risk blending two different dosing
+regimens into one misleading figure right at the moment a provider most needs a clean
+read on the new dose.
+
+**Decision:** Implemented `docs/pending/08-rolling-average-trends.md` as specified (panel
+pre-approved, no changes needed at implementation time).
+
+- New RN-free `lib/trends.ts`: `rollingAverage(values, window, boundaries?)` — a trailing
+  simple moving average over `Rating | undefined` values, returning `SmoothedValue =
+number | null`, that truncates its window at the most recent `true` in an optional
+  `boundaries` mask so a smoothed value never spans a dose-change boundary.
+  `dosePeriodBoundaries(dates, doses)` derives that mask; `recentWindowDates(dates, doses,
+window)` returns the same dose-clamped tail as a date list (used by the report).
+  `defaultWindowForRange(rangeDays)` picks 3 for a 7-day range, 7 otherwise.
+- `app/(tabs)/trends.tsx`: a "Smooth (Nd avg)" toggle chip in its own row (default on,
+  ephemeral `useState` — not persisted to `Profile`), overlaying thin `theme.accent` dots
+  on each metric's bar row via an absolutely-positioned sibling layer, column-aligned with
+  the existing bars and `markersRow`. The raw bars remain the primary layer; a `null`
+  smoothed value (empty window) renders no dot.
+- `lib/export.ts`: a new "Recent trend" report section — one row per scale metric with
+  data, showing the grand-range average alongside a dose-period-clamped `Recent (7d avg)`
+  figure (`ScaleAverage`, `adherenceInWindow`, `REPORT_RECENT_WINDOW = 7`). Printed with
+  its concrete date span, a `doses taken X of Y logged mornings` adherence count for that
+  identical window, and a plain caveat that these are arithmetic means of self-reported
+  ratings, not a validated score — so the figure can never be read out of context. This
+  section is new rather than a column grafted onto the existing weekly/dose-period bucket
+  tables (`periodTableHtml`), since those already show per-bucket means and have no single
+  "grand average" row for a Recent column to sit beside.
+  Golden report fixtures (`lib/__fixtures__/reports/*.html`) regenerated via `vitest -u`.
+- No new persisted state: smoothing is a pure view-time transform over `entries` already
+  loaded; `Profile`, `Backup`, and `parseBackup` are untouched.
+
+Closes `docs/pending/08-rolling-average-trends.md`.
+
 ## Trends logging-coverage caption + honest gap rendering (2026-07-19)
 
 **Problem:** `app/(tabs)/trends.tsx` never said how many of the visible days were actually
