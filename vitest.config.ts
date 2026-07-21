@@ -23,6 +23,7 @@ export default defineConfig({
         'lib/types.ts',
         'lib/schema.ts',
         'lib/storage.ts',
+        'lib/backup.ts',
         'lib/export.ts',
         'lib/checkin.ts',
         'lib/trends.ts',

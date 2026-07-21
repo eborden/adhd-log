@@ -1,6 +1,7 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Directory, File, Paths } from 'expo-file-system';
+import { buildBackup, parseBackup, type Backup } from './backup';
 import {
   EVENING_METRICS,
   MORNING_METRICS,
@@ -15,14 +16,9 @@ import {
   doseActiveOn,
   firstOnsetDates,
   formatIsoDate,
-  isDoseChangeList,
   isEveningRatingKey,
-  isIsoTimestamp,
   isMorningRatingKey,
-  isoTimestampNow,
-  parseEntries,
   parseIsoDate,
-  parseProfile,
 } from './storage';
 import { recentWindowDates, type SmoothingWindow } from './trends';
 import { EVENING_RATING_KEYS, MORNING_RATING_KEYS, SIDE_EFFECTS, assertNever } from './types';
@@ -32,7 +28,6 @@ import type {
   DoseChange,
   EveningRatingKey,
   IsoDate,
-  IsoTimestamp,
   Metric,
   MorningRatingKey,
   Parsed,
@@ -45,6 +40,8 @@ import type {
   SideEffectSeverity,
   TrendDirection,
 } from './types';
+
+export { buildBackup, parseBackup, type Backup };
 
 // ---------------------------------------------------------------------------
 // Pure assembly logic — no I/O, unit tested.
@@ -1127,51 +1124,6 @@ export function buildReportHtml(
       </table>
     </body>
   </html>`;
-}
-
-export interface Backup {
-  readonly exportedAt: IsoTimestamp;
-  readonly profile: Profile | null;
-  readonly doses: readonly DoseChange[];
-  readonly entries: Readonly<Record<IsoDate, DayEntry>>;
-}
-
-export function buildBackup(
-  profile: Profile | null,
-  doses: readonly DoseChange[],
-  entries: Readonly<Record<IsoDate, DayEntry>>,
-): Backup {
-  return { exportedAt: isoTimestampNow(), profile, doses, entries };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-export function parseBackup(raw: unknown): Parsed<Backup> {
-  if (!isRecord(raw) || !isIsoTimestamp(raw['exportedAt'])) {
-    return { ok: false, reason: 'Malformed backup: missing exportedAt' };
-  }
-  const profileRaw = raw['profile'];
-  let profile: Profile | null = null;
-  if (profileRaw !== null) {
-    const parsedProfile = parseProfile(profileRaw);
-    if (!parsedProfile.ok)
-      return { ok: false, reason: `Malformed backup: ${parsedProfile.reason}` };
-    profile = parsedProfile.value;
-  }
-  const doses = raw['doses'];
-  if (!isDoseChangeList(doses)) {
-    return { ok: false, reason: 'Malformed backup: invalid doses' };
-  }
-  const parsedEntries = parseEntries(raw['entries']);
-  if (!parsedEntries.ok) {
-    return { ok: false, reason: 'Malformed backup: invalid entries' };
-  }
-  return {
-    ok: true,
-    value: { exportedAt: raw['exportedAt'], profile, doses, entries: parsedEntries.value },
-  };
 }
 
 // ---------------------------------------------------------------------------

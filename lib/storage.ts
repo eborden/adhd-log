@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Backup } from './export';
+import type { Backup } from './backup';
 import {
   EVENING_RATING_KEYS,
   HOURS,
