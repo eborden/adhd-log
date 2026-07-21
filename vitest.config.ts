@@ -26,6 +26,7 @@ export default defineConfig({
         'lib/backup.ts',
         'lib/metrics.ts',
         'lib/report-metrics.ts',
+        'lib/report-html.ts',
         'lib/export.ts',
         'lib/checkin.ts',
         'lib/trends.ts',
