@@ -139,3 +139,6 @@ rebuild automatically.
 This app is deliberately local-only and the machine sits behind a corporate VPN +
 endpoint security that has blocked tunnel/cloud tooling. A local build keeps the source
 and signing key on the machine and needs no account or network round-trip to Expo.
+
+For building on GitHub Actions (still no EAS — GitHub-hosted runners run the same
+prebuild + Gradle/xcodebuild sequence), see [`CI.md`](CI.md).

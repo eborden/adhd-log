@@ -1,0 +1,214 @@
+name: CI
+
+# Quality gate runs on every PR and every push to main. The signed Android APK and the
+# unsigned iOS Simulator build are produced only on pushes to main, gated behind the gate.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same ref supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Quality gate + native fingerprint (shared cache key for the build jobs).
+  # ---------------------------------------------------------------------------
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      fp: ${{ steps.fingerprint.outputs.fp }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          HUSKY: 0 # git hooks are irrelevant in CI
+
+      - name: Quality gate
+        run: npm run check
+
+      # The @expo/fingerprint hash of the *native* inputs (same ignorePaths as
+      # scripts/build-apk.mjs). Identical hash => native tree is byte-identical =>
+      # the cached native build is valid. Exposed so both build jobs key off it.
+      - name: Compute native fingerprint
+        id: fingerprint
+        run: |
+          FP=$(node -e "import('@expo/fingerprint').then(m=>m.createFingerprintAsync(process.cwd(),{ignorePaths:['android/**','ios/**']})).then(r=>console.log(r.hash))")
+          echo "native fingerprint: $FP"
+          echo "fp=$FP" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # Signed Android release APK.
+  # ---------------------------------------------------------------------------
+  android:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # Caches ~/.gradle deps + the Gradle distribution (download avoidance only — not the
+      # build cache, which docs/BUILD.md deliberately leaves off).
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          HUSKY: 0
+
+      # Fingerprint-gated native cache: on a hit, android/ (source + compiled .cxx/build/) is
+      # restored intact and prebuild is skipped, so Gradle reuses the native compile (the
+      # ~50s warm path). On a miss we clean-prebuild + full compile, then save below.
+      - name: Restore native cache
+        id: nativecache
+        uses: actions/cache/restore@v4
+        with:
+          path: android
+          key: android-native-${{ runner.os }}-${{ needs.check.outputs.fp }}
+
+      - name: Prebuild (Android)
+        if: steps.nativecache.outputs.cache-hit != 'true'
+        run: npx expo prebuild --platform android --clean
+
+      # credentials/ is gitignored, so the keystore never lives in the repo — it is
+      # reconstructed from the base64 secret only for this build.
+      - name: Decode signing keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p credentials
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > credentials/adhd-log-release.jks
+
+      # Mirrors docs/BUILD.md's manual sequence (minus `adb install`). The release
+      # signingConfig injected by plugins/withReleaseSigning.ts activates only when these
+      # ADHDLOG_* Gradle properties are present.
+      - name: Assemble release APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew :app:assembleRelease \
+            -PADHDLOG_KEYSTORE_FILE="$GITHUB_WORKSPACE/credentials/adhd-log-release.jks" \
+            -PADHDLOG_KEYSTORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD" \
+            -PADHDLOG_KEY_ALIAS="$ANDROID_KEY_ALIAS" \
+            -PADHDLOG_KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
+
+      - name: Save native cache
+        if: steps.nativecache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: android
+          key: android-native-${{ runner.os }}-${{ needs.check.outputs.fp }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adhd-log-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Unsigned iOS Simulator build (.app). Device install would need an Apple account.
+  # ---------------------------------------------------------------------------
+  ios:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          HUSKY: 0
+
+      # CocoaPods spec cache — speeds `pod install` on a native-cache miss.
+      - name: Cache CocoaPods specs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods
+          key: cocoapods-${{ runner.os }}-${{ needs.check.outputs.fp }}
+          restore-keys: |
+            cocoapods-${{ runner.os }}-
+
+      # Fingerprint-gated native cache (ios/ includes Pods/ and the ios/build DerivedData).
+      - name: Restore native cache
+        id: nativecache
+        uses: actions/cache/restore@v4
+        with:
+          path: ios
+          key: ios-native-${{ runner.os }}-${{ needs.check.outputs.fp }}
+
+      - name: Prebuild (iOS)
+        if: steps.nativecache.outputs.cache-hit != 'true'
+        run: npx expo prebuild --platform ios --clean
+
+      # Discover the generated workspace + scheme (names derive from expo.name; don't
+      # hardcode). Unsigned Release build for the simulator; DerivedData stays in ios/build
+      # (inside the cached tree, at a path stable across runners) so xcodebuild can reuse it.
+      - name: Build for iOS Simulator
+        run: |
+          shopt -s nullglob
+          workspaces=(ios/*.xcworkspace)
+          WORKSPACE="${workspaces[0]}"
+          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json | node -e "let s='';process.stdin.on('data',d=>(s+=d)).on('end',()=>console.log(JSON.parse(s).workspace.schemes[0]))")
+          echo "Building scheme '$SCHEME' from '$WORKSPACE'"
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -derivedDataPath ios/build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package .app
+        run: |
+          shopt -s nullglob
+          apps=(ios/build/Build/Products/Release-iphonesimulator/*.app)
+          APP="${apps[0]}"
+          echo "Packaging $APP"
+          ditto -c -k --keepParent "$APP" adhd-log-sim.app.zip
+
+      - name: Save native cache
+        if: steps.nativecache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ios
+          key: ios-native-${{ runner.os }}-${{ needs.check.outputs.fp }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adhd-log-ios-sim
+          path: adhd-log-sim.app.zip
+          if-no-files-found: error
