@@ -36,6 +36,14 @@ export interface Theme {
   readonly bad: string;
   readonly neutral: string;
   /**
+   * For a metric with no better/worse axis at all (`ScaleDirection: 'neutral'`, e.g. Appetite,
+   * Libido) — every value renders in this one color regardless of rating. Deliberately a
+   * grayscale tone, not a hue from the good/bad/`neutral` spectrum: painting an unbiased metric
+   * in the same ochre used for a directional scale's *midpoint* would read as "trending
+   * mediocre" even though no such judgment is being made.
+   */
+  readonly unbiased: string;
+  /**
    * For a line/mark drawn *over* a `good`/`bad`/`neutral`-colored bar (e.g. the Trends
    * smoothing overlay) — a hue outside that rating spectrum, so it never blends into a
    * same-colored bar underneath it. Deliberately not `accent`: `accent`'s pine green sits too
@@ -58,6 +66,7 @@ const light: Theme = {
   good: palette.greenStrong,
   bad: palette.clayStrong,
   neutral: palette.ochreStrong,
+  unbiased: palette.warm500,
   trendLine: palette.indigoStrong,
 };
 
@@ -75,6 +84,7 @@ const dark: Theme = {
   good: palette.greenLight,
   bad: palette.clayLight,
   neutral: palette.ochreLight,
+  unbiased: palette.barkMuted,
   trendLine: palette.indigoLight,
 };
 
@@ -147,7 +157,7 @@ export { space, radius } from './tokens';
 
 /** Color for one day's rating bar: green toward the metric's good end, red away from it. */
 export function ratingColor(theme: Theme, rating: Rating, direction: ScaleDirection): string {
-  if (direction === 'neutral') return theme.neutral;
+  if (direction === 'neutral') return theme.unbiased;
   const better = direction === 'higher-better' ? rating >= 4 : rating <= 2;
   const worse = direction === 'higher-better' ? rating <= 2 : rating >= 4;
   if (better) return theme.good;
