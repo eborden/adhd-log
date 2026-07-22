@@ -3,6 +3,38 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Before/after dose-change comparison: sample size, adherence, and the in-app view (2026-07-22)
+
+**Problem:** The provider-report overhaul (below) shipped a before/after-dose-change section
+showing each side's mean and a change arrow, but dropped the two facts that make a titration
+comparison interpretable: how many logged days that mean rests on, and whether adherence
+differed between the two windows. A `2.4 → 3.1` reads identically whether it's backed by 12
+logged days or one. And the in-app "Around dose changes" Trends view specced alongside it was
+never built.
+
+**Decision:** Implemented `docs/pending/16-before-after-dose-comparison.md` as specified (panel
+pre-approved 2026-07-22, no changes needed at implementation time).
+
+- `BeforeAfter` (`lib/report-metrics.ts`) grew two derived-only fields —
+  `beforeAdherence`/`afterAdherence: AdherenceSummary` — computed via the existing
+  `computeAdherence` over each window's rows. No new persisted shape; nothing touches
+  `Backup`/`parseBackup`.
+- `lib/report-html.ts`'s `beforeAfterHtml` now renders `n=<n>` under each mean (`0` for an
+  `empty` side), a muted "few logged days" note when a side's `n` is below the new
+  `FEW_LOGGED_DAYS_THRESHOLD` (`lib/metrics.ts`, shared with the in-app view), and one
+  `<taken>/<logged> doses` line per table. The change arrow already suppressed itself whenever
+  either side was `'empty'` (via `computeTrend`'s existing guard) — confirmed with a dedicated
+  test rather than re-implemented.
+- New in-app "Around dose changes" section on `app/(tabs)/trends.tsx`, below the existing
+  per-day bars: one collapsible `components/DoseChangeCard.tsx` per `DoseChange`
+  (most-recent-first, only the most recent expanded by default), compact
+  `label · Before · After` rows colored via `ratingColor` through a small local `toRating(mean)`
+  ladder (not `Math.round`, which returns a bare `number` rather than the `Rating` literal
+  union). Renders nothing — not even the header — when there are no dose changes. Uses the
+  selected range as the before/after window, labeled "N-day windows" in each card header.
+- Golden report fixture snapshots (`lib/__fixtures__/reports/*.html`) regenerated via
+  `vitest -u`; the `.backup.json` fixtures are unchanged, confirming no persisted-shape drift.
+
 ## Rolling-average trend smoothing (2026-07-21)
 
 **Problem:** Raw daily 1–5 ratings are noisy enough to hide the weeks-long drift the app
