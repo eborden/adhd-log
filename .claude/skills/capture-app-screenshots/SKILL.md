@@ -132,17 +132,39 @@ a GitHub-rendered markdown file. Instead:
    where `crop_height = width * (other_screenshot_height / other_screenshot_width)` — e.g. for
    screenshots shaped like 1080×2400, `crop_height = width * 2.222`.
 2. In `README.md`, wrap the preview in a link to the full image, so clicking it opens GitHub's
-   own scrollable/zoomable image viewer:
-   ```md
-   [![Provider PDF report](docs/screenshots/report-preview.png)](docs/screenshots/report.png)
-   ```
+   own scrollable/zoomable image viewer — see the HTML `<a><img></a>` pattern below.
 
 ## Updating README.md
 
-- The "## Screenshots" section is a series of 2-column markdown tables (one table per row).
+- The "## Screenshots" section is a series of 2-column HTML `<table>`s (one table per row), not
+  markdown pipe tables:
+  ```html
+  <table>
+    <tr>
+      <th width="50%">Today</th>
+      <th width="50%">Morning check-in</th>
+    </tr>
+    <tr>
+      <td><img src="./docs/screenshots/today.png" width="100%" alt="Today screen" /></td>
+      <td>
+        <img src="./docs/screenshots/checkin.png" width="100%" alt="Morning check-in screen" />
+      </td>
+    </tr>
+  </table>
+  ```
+  Deliberately not markdown pipe tables: a markdown table's column widths are just
+  text-padding — GitHub's renderer sizes columns from content, so two screenshots with
+  different aspect ratios throw off the intended 50/50 split. Explicit `width="50%"` on each
+  `<th>` (inherited by the `<td>` below it) plus `width="100%"` on each `<img>` forces the grid
+  regardless of each image's native dimensions. This works specifically because GitHub's HTML
+  sanitizer strips inline `style="..."` attributes but leaves real `width="..."` attributes
+  alone (see the thumbnail-link pattern above for the same distinction cutting the other way —
+  it's _why_ a scrollable box isn't achievable, but it's also why this **is**).
+  For the report link, wrap the `<img>` in an `<a href="./docs/screenshots/report.png">`, same
+  as the existing Trends/Provider-report row.
   Add new screenshots in the same pattern, then run `npx prettier --write README.md` — the
-  repo's pre-commit hook enforces `prettier --check` on markdown, and table column widths need
-  reflowing by hand otherwise.
+  repo's pre-commit hook enforces `prettier --check` on markdown/HTML, and it reformats the
+  table's indentation and line-wrapping automatically.
 - Keep alt text short and screen-accurate (`Today screen`, `Morning check-in screen`, ...).
 
 ## Gotchas

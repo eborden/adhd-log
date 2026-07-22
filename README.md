@@ -17,13 +17,27 @@ phone.
 
 ## Screenshots
 
-| Today                                       | Morning check-in                                         |
-| ------------------------------------------- | -------------------------------------------------------- |
-| ![Today screen](docs/screenshots/today.png) | ![Morning check-in screen](docs/screenshots/checkin.png) |
+<table>
+  <tr>
+    <th width="50%">Today</th>
+    <th width="50%">Morning check-in</th>
+  </tr>
+  <tr>
+    <td><img src="./docs/screenshots/today.png" width="100%" alt="Today screen"></td>
+    <td><img src="./docs/screenshots/checkin.png" width="100%" alt="Morning check-in screen"></td>
+  </tr>
+</table>
 
-| Trends                                        | Provider report (click to see the [full report](docs/screenshots/report.png))              |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| ![Trends screen](docs/screenshots/trends.png) | [![Provider PDF report](docs/screenshots/report-preview.png)](docs/screenshots/report.png) |
+<table>
+  <tr>
+    <th width="50%">Trends</th>
+    <th width="50%">Provider report (click to see the <a href="./docs/screenshots/report.png">full report</a>)</th>
+  </tr>
+  <tr>
+    <td><img src="./docs/screenshots/trends.png" width="100%" alt="Trends screen"></td>
+    <td><a href="./docs/screenshots/report.png"><img src="./docs/screenshots/report-preview.png" width="100%" alt="Provider PDF report"></a></td>
+  </tr>
+</table>
 
 ## What you track
 
