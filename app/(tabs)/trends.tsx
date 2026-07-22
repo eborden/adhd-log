@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { DoseChangeCard, type DoseChangeCardRow } from '../../components/DoseChangeCard';
 import { useFocusLoad } from '../../hooks/useFocusLoad';
 import {
   daysLoggedCoverage,
+  FEW_LOGGED_DAYS_THRESHOLD,
   loggingStartDate,
   ratingAccessor,
   rowsInRange,
+  type MetricAverage,
 } from '../../lib/metrics';
+import { beforeAfterDose, formatDose, type BeforeAfter } from '../../lib/report-metrics';
 import { EVENING_METRICS, MORNING_METRICS } from '../../lib/schema';
 import {
   doseChangeMarkers,
@@ -17,7 +21,7 @@ import {
   loadProfile,
   todayIsoDate,
 } from '../../lib/storage';
-import { radius, ratingColor, space, typography, useTheme } from '../../lib/theme';
+import { radius, ratingColor, space, typography, useTheme, type Theme } from '../../lib/theme';
 import {
   defaultWindowForRange,
   dosePeriodBoundaries,
@@ -31,6 +35,7 @@ import type {
   Metric,
   Profile,
   Rating,
+  ScaleDirection,
   Session,
 } from '../../lib/types';
 
@@ -56,6 +61,8 @@ interface TrendsData {
   readonly markers: ReadonlySet<IsoDate>;
   readonly doses: readonly DoseChange[];
   readonly profile: Profile | null;
+  // Most-recent-first, one per DoseChange, windowed to the selected range.
+  readonly beforeAfterItems: readonly BeforeAfter[];
 }
 
 const EMPTY_TRENDS: TrendsData = {
@@ -64,10 +71,66 @@ const EMPTY_TRENDS: TrendsData = {
   markers: new Set<IsoDate>(),
   doses: [],
   profile: null,
+  beforeAfterItems: [],
 };
 
 function barHeight(rating: Rating): number {
   return 8 + rating * 8;
+}
+
+/**
+ * Buckets a window mean into a `Rating` for coloring only — the decimal mean stays the text
+ * shown to the user. An explicit comparison ladder, not `Math.round` (which returns a bare
+ * `number`, not the `1|2|3|4|5` literal union `ratingColor` requires).
+ */
+function toRating(mean: number): Rating {
+  return mean >= 4.5 ? 5 : mean >= 3.5 ? 4 : mean >= 2.5 ? 3 : mean >= 1.5 ? 2 : 1;
+}
+
+function formatMean(average: MetricAverage): string {
+  return average.kind === 'empty' ? '—' : average.mean.toFixed(1);
+}
+
+function meanCaption(average: MetricAverage): string {
+  const n = average.kind === 'empty' ? 0 : average.n;
+  return n < FEW_LOGGED_DAYS_THRESHOLD ? `n=${String(n)} · few logged days` : `n=${String(n)}`;
+}
+
+function meanColor(theme: Theme, average: MetricAverage, direction: ScaleDirection): string {
+  return average.kind === 'empty'
+    ? theme.textMuted
+    : ratingColor(theme, toRating(average.mean), direction);
+}
+
+/** One dose-change card's data: rows for metrics with data on either side, or null if none. */
+function doseChangeCardData(
+  theme: Theme,
+  item: BeforeAfter,
+  scaleMetrics: readonly TaggedMetric[],
+): { readonly rows: readonly DoseChangeCardRow[]; readonly adherenceCaption: string } | null {
+  const rows: DoseChangeCardRow[] = scaleMetrics.flatMap(({ metric, session }) => {
+    if (metric.kind !== 'scale') return [];
+    const before = item.before.get(metric.key) ?? { kind: 'empty' as const };
+    const after = item.after.get(metric.key) ?? { kind: 'empty' as const };
+    if (before.kind === 'empty' && after.kind === 'empty') return [];
+    return [
+      {
+        key: `${session}-${metric.key}`,
+        label: metric.label,
+        beforeText: formatMean(before),
+        beforeColor: meanColor(theme, before, metric.direction),
+        beforeCaption: meanCaption(before),
+        afterText: formatMean(after),
+        afterColor: meanColor(theme, after, metric.direction),
+        afterCaption: meanCaption(after),
+      },
+    ];
+  });
+  if (rows.length === 0) return null;
+  const beforeLogged = item.beforeAdherence.takenCount + item.beforeAdherence.notTakenCount;
+  const afterLogged = item.afterAdherence.takenCount + item.afterAdherence.notTakenCount;
+  const adherenceCaption = `Doses taken — before: ${String(item.beforeAdherence.takenCount)}/${String(beforeLogged)} · after: ${String(item.afterAdherence.takenCount)}/${String(afterLogged)}`;
+  return { rows, adherenceCaption };
 }
 
 export default function Trends() {
@@ -84,18 +147,21 @@ export default function Trends() {
         loadProfile(),
       ]);
       const rangeDates = lastNDates(range, todayIsoDate());
+      // Most-recent-first, so the card list opens with the change closest to today expanded.
+      const recentFirstDoses = [...doses].sort((a, b) => b.date.localeCompare(a.date));
       return {
         dates: rangeDates,
         rows: rowsInRange(entries, rangeDates),
         markers: doseChangeMarkers(doses, rangeDates),
         doses,
         profile,
+        beforeAfterItems: recentFirstDoses.map((change) => beforeAfterDose(entries, change, range)),
       };
     },
     EMPTY_TRENDS,
     [range],
   );
-  const { dates, rows, markers, doses, profile } = data;
+  const { dates, rows, markers, doses, profile, beforeAfterItems } = data;
   const since = profile ? loggingStartDate(profile) : undefined;
   const dayCoverage = daysLoggedCoverage(rows, since);
   const smoothingWindow = defaultWindowForRange(range);
@@ -243,6 +309,28 @@ export default function Trends() {
           </View>
         );
       })}
+
+      {doses.length === 0 ? null : (
+        <View style={styles.doseChangesSection}>
+          <Text style={[typography.sectionLabel, styles.metricLabel, { color: theme.textMuted }]}>
+            Around dose changes
+          </Text>
+          {beforeAfterItems.map((item, index) => {
+            const cardData = doseChangeCardData(theme, item, visibleScaleMetrics);
+            if (cardData === null) return null;
+            return (
+              <DoseChangeCard
+                key={`${item.change.date}-${String(index)}`}
+                title={`${formatDose(item.change.dose)} on ${item.change.date}`}
+                windowLabel={`${String(range)}-day windows`}
+                rows={cardData.rows}
+                adherenceCaption={cardData.adherenceCaption}
+                defaultExpanded={index === 0}
+              />
+            );
+          })}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -275,6 +363,9 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     marginBottom: space.sm,
+  },
+  doseChangesSection: {
+    marginTop: space.md,
   },
   coverageCaption: {
     marginBottom: space.sm,
