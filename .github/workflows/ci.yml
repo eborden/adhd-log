@@ -54,7 +54,7 @@ jobs:
   # ---------------------------------------------------------------------------
   android:
     needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: 'true' # SCRATCH: forced for validation, never merged
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -135,7 +135,7 @@ jobs:
   # ---------------------------------------------------------------------------
   ios:
     needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: 'true' # SCRATCH: forced for validation, never merged
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
