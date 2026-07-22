@@ -17,8 +17,6 @@ phone.
 
 ## Screenshots
 
-<!-- Placeholders — add real screenshots to docs/screenshots/ and they'll render here. -->
-
 | Today                                       | Trends                                        |
 | ------------------------------------------- | --------------------------------------------- |
 | ![Today screen](docs/screenshots/today.png) | ![Trends screen](docs/screenshots/trends.png) |
