@@ -27,10 +27,6 @@
       .spark-line.spark-w1 > .spark { width: 1px; }
       /* Weekly headers go vertical past 5 weeks so a many-week table stays within the page width. */
       th.vhead { writing-mode: vertical-lr; white-space: nowrap; vertical-align: bottom; }
-      /* Neutral encoding for the weekly self-rating: no good/bad rating hue (it's the patient's
-         own word, not a judgment) — one accent color for all three impressions, distinguished
-         only by impressionGlyph's directional glyph. */
-      .impression-chip { background: #E8E1D3; color: #2A251E; border: 1px solid #2E6B4F; border-radius: 999px; padding: 2px 10px; font-size: 12px; }
       @media print {
         body { background: transparent; }
       }
@@ -49,37 +45,37 @@
        <tr><th>Week of</th><th>Overall</th><th>Adherence</th><th>Dose change</th><th>Note</th></tr>
        <tr>
         <td>2026-03-02</td>
-        <td><span class="impression-chip">▼ Worse than the week before</span></td>
+        <td>▼ Worse than the week before</td>
         <td>4/4 doses</td>
         <td>1mg</td>
         <td>New medication — feeling sedated and dizzy.</td>
       </tr><tr>
         <td>2026-03-09</td>
-        <td><span class="impression-chip">▬ About the same</span></td>
+        <td>▬ About the same</td>
         <td>3/3 doses</td>
         <td></td>
         <td>Anxiety improving, energy still low.</td>
       </tr><tr>
         <td>2026-03-16</td>
-        <td><span class="impression-chip">▼ Worse than the week before</span></td>
+        <td>▼ Worse than the week before</td>
         <td>4/4 doses</td>
         <td>2mg</td>
         <td>Bumped to 2mg — dizzy again for a few days.</td>
       </tr><tr>
         <td>2026-03-23</td>
-        <td><span class="impression-chip">▲ Better than the week before</span></td>
+        <td>▲ Better than the week before</td>
         <td>3/3 doses</td>
         <td></td>
         <td>Leveled out — mood and focus clearly better than last week.</td>
       </tr><tr>
         <td>2026-03-30</td>
-        <td><span class="impression-chip">▬ About the same</span></td>
+        <td>▬ About the same</td>
         <td>4/4 doses</td>
         <td>3mg</td>
         <td>Adjusting to 3mg, roughly steady.</td>
       </tr><tr>
         <td>2026-04-06</td>
-        <td><span class="impression-chip">▲ Better than the week before</span></td>
+        <td>▲ Better than the week before</td>
         <td>3/3 doses</td>
         <td></td>
         <td>Best week yet — sharp focus, calm, sleeping great.</td>

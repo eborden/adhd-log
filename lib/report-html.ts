@@ -418,8 +418,8 @@ export function impressionGlyph(overall: WeeklyImpression): string {
 }
 
 /**
- * Descriptive weekly-impression timeline, sorted oldest-first. Every impression renders with the
- * same neutral chip (no good/bad rating hue — this is the patient's own word, not a judgment),
+ * Descriptive weekly-impression timeline, sorted oldest-first. Every impression renders as
+ * plain text (no good/bad rating hue — this is the patient's own word, not a judgment),
  * distinguished only by `impressionGlyph`. Adherence and any in-week dose change ride alongside
  * each rating so a provider can read a "worse" week against its confounders without
  * cross-referencing other sections. Omitted entirely when `weekly` is empty.
@@ -443,7 +443,7 @@ function buildWeeklyTimelineHtml(
       const noteCell = checkin.note === undefined ? '' : escapeHtml(checkin.note);
       return `<tr>
         <td>${escapeHtml(checkin.weekOf)}</td>
-        <td><span class="impression-chip">${impressionGlyph(checkin.overall)} ${escapeHtml(WEEKLY_IMPRESSION_LABELS[checkin.overall])}</span></td>
+        <td>${impressionGlyph(checkin.overall)} ${escapeHtml(WEEKLY_IMPRESSION_LABELS[checkin.overall])}</td>
         <td>${adherenceCell}</td>
         <td>${changeCell}</td>
         <td>${noteCell}</td>
@@ -719,10 +719,6 @@ export function buildReportHtml(
       .spark-line.spark-w1 > .spark { width: 1px; }
       /* Weekly headers go vertical past 5 weeks so a many-week table stays within the page width. */
       th.vhead { writing-mode: vertical-lr; white-space: nowrap; vertical-align: bottom; }
-      /* Neutral encoding for the weekly self-rating: no good/bad rating hue (it's the patient's
-         own word, not a judgment) — one accent color for all three impressions, distinguished
-         only by impressionGlyph's directional glyph. */
-      .impression-chip { background: ${palette.warm100}; color: ${palette.warm900}; border: 1px solid ${palette.pineStrong}; border-radius: 999px; padding: 2px 10px; font-size: 12px; }
       @media print {
         body { background: transparent; }
       }

@@ -78,6 +78,29 @@ strictness flag above still applies in full to our own source.
   check-in fields), `checkin` (RN-free `Draft` state + session construction from the schema),
   `storage`, `notifications`, `export`, `tokens` (design primitives) → `theme` (semantic
   layer), `__tests__/`.
+- `docs/hubs/*.md` — Obsidian-style feature-hub maps (Check-in flow, Reminders &
+  notifications, Provider report & backup, Trends, Profile & settings). When a new file
+  belongs to an existing feature area, add a `[[wikilink]]` to it in the matching hub — an
+  unlinked file is an orphan. Don't create a new hub for a sub-feature that extends an
+  existing area; add a subsection to the existing hub instead.
+- `lib/__fixtures__/scenarios.ts` — 10 hand-authored, human-reviewable golden report
+  scenarios (see `docs/DECISIONS.md`). A new report-rendering feature must add matching
+  narrative data to each scenario it applies to, not just a type-satisfying empty stub —
+  regenerate with `vitest -u` on `lib/__tests__/scenarios.test.ts` after any content change.
 
 Add or rename a tracked metric in `lib/schema.ts` only; both check-in sessions render
 generically from it.
+
+## UI changes aren't done until screenshotted
+
+`npm run check` catches type/logic errors, not layout mistakes. Before calling a UI or
+report-rendering change done: capture the actual rendered result (the
+`capture-app-screenshots` skill) and update `docs/screenshots/*.png` if user-visible; for
+`lib/report-html.ts` changes, also regenerate the golden fixtures and
+`report.png`/`report-preview.png`.
+
+## Working in a git worktree
+
+A worktree doesn't inherit `node_modules`. Symlinking it in to skip a slow install is fine,
+but `.gitignore`'s `node_modules/` pattern doesn't match a symlink — it can slip through
+`git add -A`. Check `git status` before committing.
