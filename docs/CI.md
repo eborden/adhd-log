@@ -65,3 +65,10 @@ compile runs and then populates the cache. A matching fingerprint means the nati
 byte-identical, so the cache is valid by the same argument the local gate relies on — a
 mismatch only ever costs a rebuild, never a stale artifact. The Metro JS bundle is never
 cached and runs every build, so it can't ship stale JS.
+
+The cache key also folds in the resolved Node version (`android-native-…-node<version>-<fp>`,
+same for `ios-native-…`). `expo prebuild`/CocoaPods bakes an **absolute path** to the Node
+binary into the generated project (`.xcode.env.local` on iOS in particular), so restoring a
+tree built under a different Node version would point at a binary that no longer exists on
+the runner. Bumping `.nvmrc` therefore forces a fresh prebuild on both platforms rather than
+silently reusing a native tree wired to a stale Node path.
