@@ -104,8 +104,9 @@ unacceptable.
 
 Resolution: **keep the record, drop the unknown trigger — but NOT inside `isDoseChange`.** A
 `value is DoseChange` predicate that returned `true` while leaving an unrecognized string in a
-`DoseChangeTrigger?` slot would be a lie (the exact trap already documented on `isEveningCheckin`). So
-mirror the `parseEveningCheckin` / `isEveningCheckin` split:
+`DoseChangeTrigger?` slot would be a lie (the exact trap the codebase avoids by pairing a strict
+`is*` predicate with a tolerant `parse*` normalizer). So mirror that split — the strict predicate
+(`isMorningCheckin`) beside the tolerant normalizer (`parseEveningCheckin`, `parseSideEffectReports`):
 
 - `isDoseChange` stays **strict** — an unknown trigger makes it return `false` (the predicate stays
   honest; no `DoseChange` ever holds an invalid trigger → illegal states unrepresentable).
@@ -122,7 +123,7 @@ mirror the `parseEveningCheckin` / `isEveningCheckin` split:
 (reject-record) can lose months of objective dose history over a cosmetic field, which the panel
 rejected.
 
-## Derivation helper (`lib/export.ts` or `lib/storage.ts`, RN-free)
+## Derivation helper (`lib/storage.ts` or `lib/report-metrics.ts`, RN-free)
 
 ```ts
 export function doseChangeDirection(
@@ -141,7 +142,7 @@ Compares within a single `DoseUnit` (a unit switch mid-titration is out of scope
 pins one unit per change; a mismatched unit falls back to `'hold'` rather than comparing incomparable
 numbers, and is noted). Pure and unit-tested.
 
-## Report (`lib/export.ts`)
+## Report (`lib/report-html.ts`)
 
 - The existing dose-change / before-after tables gain a **"why" line** per change: the direction
   arrow (derived) + the trigger label (or "reason not recorded"), value-free. E.g. `↑ increase ·

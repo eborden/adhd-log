@@ -91,7 +91,7 @@ The evening subset is _not_ filtered by `enabledEveningMetricKeys` here — base
 
 ## Storage & guards
 
-Add a guard in `lib/storage.ts` returning through the existing `Parsed<T>` discipline, and wire it into `isProfile`. It uses the file's existing `isRecord` type guard (`lib/storage.ts:30-32`) exactly as every other guard in the file does — **no `as Record<string, unknown>` cast**. This is both the "never cast untrusted data" rule and a real correctness point: after a bare `typeof ratings === 'object' && ratings !== null` check, `ratings` is typed `object` and `Object.entries(ratings)` resolves to the `[string, any][]` overload, leaking `any` into the loop (which trips `no-unsafe-assignment`). `isRecord(ratings)` narrows to `Record<string, unknown>` and selects the safe `entries<T>` overload with zero casts.
+Add a guard in `lib/storage.ts` returning through the existing `Parsed<T>` discipline, and wire it into `isProfile`. It uses the file's existing `isRecord` type guard (`lib/storage.ts:38-40`) exactly as every other guard in the file does — **no `as Record<string, unknown>` cast**. This is both the "never cast untrusted data" rule and a real correctness point: after a bare `typeof ratings === 'object' && ratings !== null` check, `ratings` is typed `object` and `Object.entries(ratings)` resolves to the `[string, any][]` overload, leaking `any` into the loop (which trips `no-unsafe-assignment`). `isRecord(ratings)` narrows to `Record<string, unknown>` and selects the safe `entries<T>` overload with zero casts.
 
 ```ts
 export function isBaselineSnapshot(value: unknown): value is BaselineSnapshot {
@@ -112,7 +112,7 @@ export function isBaselineSnapshot(value: unknown): value is BaselineSnapshot {
 This needs an `isRatingKey` guard plus a combined runtime list of every rating key. As of the
 2026-07-18 "Ratings as a record" reshape, `lib/types.ts` already exports the two per-session
 runtime lists as as-const arrays (`MORNING_RATING_KEYS`, `EVENING_RATING_KEYS`), and `RatingKey`
-is already the **derived** union `MorningRatingKey | EveningRatingKey` (at `lib/types.ts:109`) —
+is already the **derived** union `MorningRatingKey | EveningRatingKey` (at `lib/types.ts:128`) —
 _not_ a hand-written string-literal union. So the only genuinely-missing pieces are the combined
 list and its guard. **Compose `RATING_KEYS` from the two existing arrays; do not redefine
 `RatingKey`** (redefining it would duplicate or silently diverge from the existing derived
@@ -131,7 +131,7 @@ export function isRatingKey(value: unknown): value is RatingKey {
 }
 ```
 
-Extend `isProfile` (currently at `lib/storage.ts:91`, narrowing through a `value` parameter — not a `v` alias) with one clause before it returns `true`:
+Extend `isProfile` (currently at `lib/storage.ts:99`, narrowing through a `value` parameter — not a `v` alias) with one clause before it returns `true`:
 
 ```ts
 if (value['baseline'] !== undefined && !isBaselineSnapshot(value['baseline'])) return false;
@@ -141,7 +141,7 @@ if (value['baseline'] !== undefined && !isBaselineSnapshot(value['baseline'])) r
 
 **Backward compatibility / migrate-on-read.** No migration function is required and none should be added: `baseline` is optional, so `parseProfile` accepts a stored profile that predates this field (the new clause only rejects a _malformed_ baseline, never an absent one). Historical `DayEntry` data is untouched — baseline lives on `Profile`, a different AsyncStorage key ("profile"). A round-trip of an old profile through `parseProfile` → `saveProfile` re-serializes without a `baseline` key (absent, not `null`), preserving shape.
 
-**Backup.** `parseBackup` (`lib/export.ts:224`) already validates its `profile` field through `parseProfile`/`isProfile`, so extending `isProfile` automatically extends backup import/export coverage — a backup taken after this ships carries the baseline, and an older backup without one still parses. No change to the `Backup` interface.
+**Backup.** `parseBackup` (`lib/backup.ts:29`) already validates its `profile` field through `parseProfile`/`isProfile`, so extending `isProfile` automatically extends backup import/export coverage — a backup taken after this ships carries the baseline, and an older backup without one still parses. No change to the `Backup` interface.
 
 Add a thin writer next to `saveProfile` for the "record baseline" action to keep the merge in one tested place:
 
@@ -172,16 +172,17 @@ Overwrite confirmation is enforced at the UI layer (Settings), not here — `sav
 
 ## Export / report
 
-In `lib/export.ts`, extend `buildReportHtml(profile: Profile | null, doses, rows)`. Note the real signature: **`profile` is `Profile | null`**, so every baseline read must be null-safe — `profile?.baseline?.ratings[k]` (a bare `profile.baseline?…` is `Object is possibly 'null'` and fails `tsc`).
+In `lib/report-html.ts`, extend `buildReportHtml(profile, doses, entries, rangeStart, rangeEnd, options)`. Note the real signature: **`profile` is `Profile | null`**, so every baseline read must be null-safe — `profile?.baseline?.ratings[k]` (a bare `profile.baseline?…` is `Object is possibly 'null'` and fails `tsc`).
 
-The averages tables need a typed key at the row level, which `ScaleAverage` does not currently carry. **Add `readonly key: RatingKey` to `ScaleAverage`** (`lib/export.ts:60-64`) and populate it in `computeScaleAverages` (`lib/export.ts:66-81`, which already has `metric.key` in scope but discards it). Without this there is nothing to index `profile?.baseline?.ratings[k]` with.
+The averages tables need a typed key at the row level, which `ScaleAverage` does not currently carry. **Add `readonly key: RatingKey` to `ScaleAverage`** (`lib/report-metrics.ts:249-254`) and populate it where the `scaleAverages` array is built inline in `buildReportHtml` (`lib/report-html.ts:453-467`, whose `scaleMetricFor(key)` loop already has both the loop `key` and `metric` in scope but discards the key). Without this there is nothing to index `profile?.baseline?.ratings[k]` with.
 
 ```ts
 interface ScaleAverage {
-  readonly key: RatingKey; // <-- new; populated from metric.key
+  readonly key: RatingKey; // <-- new; populated from the loop key
   readonly label: string;
   readonly direction: ScaleDirection;
   readonly average: number | null;
+  readonly recentAverage: number | null;
 }
 ```
 
@@ -203,7 +204,7 @@ n/a. Baseline is a one-time, user-initiated capture; adding a reminder would pus
 
 ## Test plan
 
-All logic under test lives in the coverage-scoped modules (`lib/{types,schema,storage,export}.ts`); the RN screens carry no testable logic. Fixtures use the sanctioned `as IsoDate` / `as IsoTimestamp` / `as MedName` literal idiom (`type-coverage --ignore-as-assertion`).
+All logic under test lives in the coverage-scoped modules (`lib/{types,schema,storage,backup,metrics,report-metrics,report-html,export,checkin,trends}.ts`); the RN screens carry no testable logic. Fixtures use the sanctioned `as IsoDate` / `as IsoTimestamp` / `as MedName` literal idiom (`type-coverage --ignore-as-assertion`).
 
 `lib/__tests__/storage.test.ts`:
 
@@ -217,7 +218,7 @@ All logic under test lives in the coverage-scoped modules (`lib/{types,schema,st
 
 - `baselineRatingKeys()` returns morning-then-evening scale keys in order and contains no `doseTaken`/`sleepHours`/`sideEffects`/`notes`.
 
-`lib/__tests__/export.test.ts`:
+`lib/__tests__/report-html.test.ts` (where `buildReportHtml` and its rendering helpers are now tested — `lib/export.ts` retains only native PDF/JSON I/O):
 
 - `formatDelta` returns `'+1.4'` (ASCII `+`), `'−0.6'` (**U+2212 MINUS SIGN**, not ASCII hyphen — assert the exact glyph so an implementer who reaches for `String(delta)`'s ASCII `-` fails the test), and `'—'` when either side is missing.
 - `formatBaselineTiming` returns the "before start" phrasing for a pre-`startDate` timestamp, the "on start day" phrasing for a same-day one, and the "after start (retrospective)" phrasing for a later one (assert the exact `(retrospective)` substring and its absence in the pre-start case).
@@ -231,7 +232,7 @@ Coverage stays ≥ thresholds: every new pure function (`isBaselineSnapshot`, `i
 - **No `!`**: `noUncheckedIndexedAccess` yields `Rating | undefined` from `baseline.ratings[k]`; `profile` is `Profile | null`. All report reads use `profile?.baseline?.…` and narrow with explicit `!== undefined` / `!== null`, returning `'—'` on the missing branch — never assert.
 - **No `@ts-*` / `eslint-disable`**: none introduced.
 - **Branded values**: `recordedAt` is minted by `isoTimestampNow()` (guard-and-throw), never `as` outside test fixtures.
-- **Exhaustiveness**: no new `Metric` variant, so the `checkin.tsx` / `entry` `switch (metric.kind)` statements and their `assertNever` defaults remain exhaustive and compile unchanged; `baselineRatingKeys` uses a filtering type-guard predicate rather than a switch.
+- **Exhaustiveness**: no new `Metric` variant, so the `checkin.tsx` `switch (metric.kind)` statement and its `assertNever` default (`app/checkin.tsx:113,206`) remains exhaustive and compiles unchanged (`entry/[date].tsx` and `trends.tsx` filter on `metric.kind === 'scale'` rather than switching, so they are untouched too); `baselineRatingKeys` uses a filtering type-guard predicate rather than a switch.
 - **`exactOptionalPropertyTypes`**: `baseline?` and `note?` are written via conditional spreads / omission, never assigned `undefined` explicitly.
 - **type-coverage 100%**: the only `as` uses are the `RATING_KEYS as readonly string[]` widening in `isRatingKey` (compatible-type) and test-fixture literals, both exempt under `--ignore-as-assertion`.
 
@@ -274,7 +275,7 @@ Coverage stays ≥ thresholds: every new pure function (`isBaselineSnapshot`, `i
   per-session as-const lists exist, so this doc adds only the combined `RATING_KEYS`
   (`[...MORNING_RATING_KEYS, ...EVENING_RATING_KEYS]`) and `isRatingKey` — `RatingKey` is left
   untouched, not replaced.
-- **`ScaleAverage.key`:** added `readonly key: RatingKey`, populated from `metric.key` in `computeScaleAverages`, so the Δ column has a key to index.
+- **`ScaleAverage.key`:** added `readonly key: RatingKey`, populated from the loop key where the `scaleAverages` array is built inline in `buildReportHtml`, so the Δ column has a key to index.
 - Folded suggestions: `isProfile` snippet uses `value['baseline']`; `Readonly<Partial<…>>` ordering adopted; U+2212 glyph pinned in the `formatDelta` test prose.
 
 ### Mobile UX / friction & completion — approve-with-changes

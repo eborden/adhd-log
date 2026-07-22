@@ -20,7 +20,7 @@ a combination cannot represent it without conflating two drugs' doses into one t
 
 The `docs/pending` ground rules put scope discipline first, and the panels have repeatedly flagged
 over-engineering. Multi-med is **cross-cutting**: it touches `Profile`, `DoseChange`, `Backup`,
-onboarding, Settings, the report, Trends, and every dose-bucketing calculation in `export.ts`. It is
+onboarding, Settings, the report, Trends, and every dose-bucketing calculation in `lib/report-metrics.ts`. It is
 by far the largest of the research-derived plans, and it risks turning a focused single-drug titration
 tracker into a general medication manager — a different product.
 
@@ -92,9 +92,10 @@ scheduled.
 - **The "primary" filter is `target === undefined || target === 'primary'`** (panel — TS lens): the
   default must match both absent (legacy) and explicit-primary.
 - **`doseActiveOn(doses, date, target = 'primary')`** — filter by target before resolving; all
-  existing callers get primary by default. **Every** dose-timeline consumer in `export.ts`
-  (`bucketByDosePeriod`, `beforeAfterDose`, `doseChangeMarkers`, `lastChangeOnOrBefore`) must become
-  target-aware, or it silently merges two meds' steps — this is the real cost of B (panel — TS lens).
+  existing callers get primary by default. **Every** dose-timeline consumer in `lib/report-metrics.ts`
+  and `lib/storage.ts` (`bucketByDosePeriod`, `beforeAfterDose`, `lastChangeOnOrBefore`,
+  `doseChangeMarkers`) must become target-aware, or it silently merges two meds' steps — this is the
+  real cost of B (panel — TS lens).
 - **Report/Trends:** a second, clearly-labeled dose track; before/after (doc-16) computed per target.
   On the small mobile Trends chart a two-track render is the genuine clutter risk (panel — UX lens) —
   not the data model; the second track must not crowd the primary med's bars/markers. Keep the "log
@@ -130,8 +131,8 @@ folded into the sketch above so B is pre-thought-through if ever triggered.
 - **Strict-TypeScript architect — approve.** Option A is copy-only, zero type surface. _Carried into
   B:_ B's shapes are type-sound and back-compat (optional `adjunct`, `target` defaulting primary), but
   `isProfile` + a new `AdjunctMed` guard must validate the field, the primary filter must be
-  `target === undefined || target === 'primary'`, and every dose-timeline consumer in `export.ts`
-  becomes target-aware — the doc now books that cost.
+  `target === undefined || target === 'primary'`, and every dose-timeline consumer in
+  `lib/report-metrics.ts`/`lib/storage.ts` becomes target-aware — the doc now books that cost.
 - **Mobile UX / friction — approve.** From this lens A is ideal (zero daily-flow change). _Carried
   into B:_ adjunct entry stays optional and off the daily check-in, and the two-track mobile chart —
   not the data model — is the real clutter risk to manage.

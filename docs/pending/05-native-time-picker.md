@@ -6,12 +6,12 @@
 
 ## Problem
 
-`TimeOfDay` fully models `minute: Minute` (0–59) — see `lib/types.ts:25-30, 61-64` — and the whole
-notification path passes it through (`lib/notifications.ts:77-83` uses `time.minute` in the DAILY
+`TimeOfDay` fully models `minute: Minute` (0–59) — see `lib/types.ts:25-30, 80-83` — and the whole
+notification path passes it through (`lib/notifications.ts:78-84` uses `time.minute` in the DAILY
 trigger). But every UI path **hardcodes `minute: 0`** and exposes only an hour `Stepper`:
 
 - `app/onboarding.tsx:51-52` — `morningReminder: { hour, minute: 0 }`, `eveningReminder: { …, minute: 0 }`
-- `app/(tabs)/settings.tsx:102-103` — same, in `handleReminderChange`
+- `app/(tabs)/settings.tsx:109-110` — same, in `handleReminderChange`
 
 So the domain can express an 8:30 reminder, but the app can never set one. A scrolling time wheel is
 exactly the native-feel widget not worth hand-rolling (a two-field hour+minute stepper would be
@@ -44,11 +44,11 @@ interface TimeFieldProps {
 ```
 
 - Narrow the picker's output through the existing `isHour` / `isMinute` guards
-  (`lib/storage.ts:59-65`) before constructing a `TimeOfDay` — do **not** cast. If either guard
+  (`lib/storage.ts:63-69`) before constructing a `TimeOfDay` — do **not** cast. If either guard
   fails, ignore the change (matches the current `handleReminderChange` guard style).
 - `onboarding.tsx`: replace `morningHour`/`eveningHour` number state + the two hour Steppers with two
   `TimeField`s backed by `TimeOfDay` state (default `{ hour: 8, minute: 0 }` / `{ hour: 20, minute: 0 }`).
-- `settings.tsx`: replace the two hour Steppers (`:261-281`) and update `handleReminderChange` to take
+- `settings.tsx`: replace the two hour Steppers (`:236-255`) and update `handleReminderChange` to take
   a full `TimeOfDay` instead of just an hour; keep the `scheduleReminders` re-schedule side effect.
 
 ### 3. Keep it out of `lib/`

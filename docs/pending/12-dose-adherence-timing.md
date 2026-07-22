@@ -374,7 +374,7 @@ No forced re-onboarding: `Profile` is untouched. Historical `entries` are never 
 
 ## Export / report
 
-`lib/export.ts` (pure assembly + native I/O). The tally answers "how much drug, on schedule how often, out of how many days, and why not" — all descriptive, all self-reported:
+`lib/report-metrics.ts` (pure report tallies; the HTML assembly lives in `lib/report-html.ts`, and `lib/export.ts` is native I/O only after the provider-report overhaul). The tally answers "how much drug, on schedule how often, out of how many days, and why not" — all descriptive, all self-reported:
 
 ```ts
 export interface DoseAdherence {
@@ -464,7 +464,7 @@ export function doseTimingSpan(rows: readonly DayEntry[]): DoseTimingSpan | null
 
 **Resolving the rate ambiguity (clinical must-fix).** The earlier single `takenRate = taken/logged` conflated "received the drug" with "took it on schedule." For a slowly-accumulating non-stimulant, a consistently-late-but-never-missed trial has _complete_ weekly exposure yet would have read as low adherence. The report now shows **both** figures, explicitly labeled — **Dose exposure `(taken+late)/logged`** (relevant to the multi-week efficacy signal) and **On-time `taken/logged`** (relevant only to the same-day evening-rating confound) — so neither can be misread as the other. This is resolved here, not deferred.
 
-`buildReportHtml(profile, doses, rows)` gains a **"Dose adherence"** block after the header containing, all descriptive:
+`buildReportHtml` (in `lib/report-html.ts`) gains a **"Dose adherence"** block after the header containing, all descriptive:
 
 - **Days logged: N of M** (`logged` of `totalDays`) so a sparse-but-perfect record (e.g. 5 of 30 days, all `taken`) can't read as excellent adherence — the denominator is always visible (clinical suggestion).
 - A `Taken / Late / Missed` count line.
@@ -472,7 +472,7 @@ export function doseTimingSpan(rows: readonly DayEntry[]): DoseTimingSpan | null
 - **Dose times: earliest–latest** from `doseTimingSpan` (or "—") — a one-line timing-variability signal so the provider can judge at a glance whether timing has been a confound, without reading every daily row (clinical suggestion; a cheap interim for the deferred adherence strip).
 - **Reasons given** from `doseMissReasons`, listing only non-zero reasons via `DOSE_MISS_REASON_LABELS`, so a cluster of missed doses carries the behavioral-vs-clinical lead the provider needs (clinical must-fix).
 
-The Daily-log table gains a **Dose** column showing `DOSE_STATUS_LABELS[status]`, the formatted `timeTaken` where present, and the reason label where present. Every value passes through `escapeHtml`; status cells use the existing rating palette (`good`/`neutral`/`bad`) via the same inline-style approach as other colored cells — the palette is presentation, not a judgment. Coordinate placement with **doc 01** so the adherence block sits above the averages tables it introduces.
+The Daily-log table gains a **Dose** column showing `DOSE_STATUS_LABELS[status]`, the formatted `timeTaken` where present, and the reason label where present. Every value passes through `escapeHtml`; status cells use the existing rating palette (`good`/`neutral`/`bad`) via the same inline-style approach as other colored cells — the palette is presentation, not a judgment. The per-period / before-after averages tables already shipped with the **provider-report overhaul** (former doc 06, now in `docs/DECISIONS.md`); slot the adherence block above them in the existing `report-html.ts` structure.
 
 ## Notifications
 
@@ -489,11 +489,13 @@ New/extended Vitest specs in the covered `lib/` modules, using the sanctioned `a
   - `parseEntries` (strict) migrates a record mixing one legacy-boolean day and one new-shape day, and returns `ok:false` naming the date on a genuinely malformed day.
   - `salvageEntries` (resilient) keeps good days and reports the bad one in `dropped` rather than discarding all; a lone corrupt day does **not** empty the result.
   - Round-trip: a legacy blob loaded via `loadEntries` yields `dose.status`, and is _not_ written back on read — assert `AsyncStorage.setItem` is not called on load via the `lib/__mocks__` mock.
-- **`lib/__tests__/export.test.ts`**
+- **`lib/__tests__/report-metrics.test.ts`** (where the existing `computeAdherence` / `adherenceInWindow` specs live)
   - `doseAdherence` counts across a range with gaps; `exposureRate`/`onTimeRate === null` when nothing logged; a hand-built fixture where all doses are `late` yields `exposureRate === 1` but `onTimeRate === 0` (the exact case the two-rate split exists to disambiguate); `totalDays` reflects range length, not just logged days.
   - `doseMissReasons` tallies only `late`/`missed` reasons; `doseTimingSpan` returns earliest/latest and `null` when no time recorded.
+- **`lib/__tests__/report-html.test.ts`**
   - `buildReportHtml` asserts exact substrings for the adherence block (`Days logged`, `Taken`, `Late`, `Missed`, both rate labels and percents, the timing span, a reason label) and a Dose column cell with a formatted time; assert `escapeHtml` holds on a reason/notes-adjacent field.
-  - `parseBackup` imports a backup whose `entries` contain legacy `doseTaken: boolean` days and yields migrated `dose` records — locking in the `isEntries → parseEntries` fix so it can't silently regress to whole-file rejection.
+- **`lib/__tests__/backup.test.ts`** (already covers legacy-backup import)
+  - `parseBackup` imports a backup whose `entries` contain legacy `doseTaken: boolean` days and yields migrated `dose` records — extending the existing legacy-entries import test to the new dose shape.
 
 Coverage stays ≥ thresholds (lines/statements/functions 90, branches 85): the new pure functions live in already-covered modules, and the migration plus the two adherence `switch`es add branch coverage.
 
@@ -508,7 +510,7 @@ Coverage stays ≥ thresholds (lines/statements/functions 90, branches 85): the 
 
 ## Dependencies & sequencing
 
-- **Coordinates with doc 01** (report/averages): both add blocks to `buildReportHtml`; agree on ordering (adherence block above the averages tables) and share the `rowsInRange` row type. Land the type/storage migration here first, then 01 consumes `doseAdherence` output.
+- **Builds on the shipped provider report** (former doc 06, now in `docs/DECISIONS.md` as "Provider report overhaul"): its per-period / before-after averages tables already live in `buildReportHtml` (`lib/report-html.ts`). The adherence block slots above those tables and shares the report's in-range row type. Land the type/storage migration here first, then wire `doseAdherence` output into the existing report.
 - **Independent of** evening-metric docs — this touches only `MorningCheckin` and the morning schema entry.
 - **Enables** a future provider-facing "adherence vs. trend" overlay; that overlay is explicitly deferred.
 - **Flagged upward (not this doc):** the clinical panel notes the adherence record is most useful read next to a validated global-impression anchor (PGI-C/CGI-I-style "compared to before starting, how are things overall this week?"). The schema today has only itemized scales. This belongs at the doc-01 / roadmap level and is out of scope here.

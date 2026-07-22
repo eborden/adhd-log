@@ -4,7 +4,7 @@
 
 ## Problem / Context
 
-Completion rate is the silent dependency of everything this app promises. A non-stimulant ADHD medication's signal accumulates over _weeks_; the value the provider gets is the shape of the trend line in `app/(tabs)/trends.tsx`, not any single day. Gaps corrupt that shape twice over: `averageOf` in `lib/export.ts` silently drops missing days, so a sparsely-logged fortnight produces an average computed from three data points and reads as confidently as one from fourteen. And `computeStreak` — the one motivational lever on the Today screen — resets to zero the moment a day is skipped, which for the target user (someone whose executive-function tax is the whole reason the medication exists) is the exact failure mode the app should be designed around.
+Completion rate is the silent dependency of everything this app promises. A non-stimulant ADHD medication's signal accumulates over _weeks_; the value the provider gets is the shape of the trend line in `app/(tabs)/trends.tsx`, not any single day. Gaps corrupt that shape twice over: `averageOf` in `lib/metrics.ts` silently drops missing days, so a sparsely-logged fortnight produces an average computed from three data points and reads as confidently as one from fourteen. And `computeStreak` — the one motivational lever on the Today screen — resets to zero the moment a day is skipped, which for the target user (someone whose executive-function tax is the whole reason the medication exists) is the exact failure mode the app should be designed around.
 
 So the intervention that most protects trend quality is not a new metric — it is _removing taps and removing decisions_ from the daily loop. This doc bundles three friction reducers, ranked by effort and confidence:
 
@@ -152,7 +152,7 @@ The clinical lens raised a real question: should each day record whether it was 
 
 ## Schema
 
-**n/a.** `lib/schema.ts` (`MORNING_METRICS`, `EVENING_METRICS`, `DEFAULT_ENABLED_EVENING_METRICS`) is the single source of truth for _which fields exist and render_. This doc adds no field and no `Metric` variant, so schema is untouched — and deliberately so: adding a `Metric` variant would trip the `assertNever` seams across `checkin.tsx`, `trends.tsx`, and `entry/[date].tsx`, which is exactly the churn a friction-reduction feature should avoid. `copyableRatings` enumerates rating keys explicitly rather than iterating the schema, because it must make a per-field _policy_ decision (which fields are volatile); this is intentional and is the one place the feature is not schema-generic. If a new `RatingKey` is added by another doc, `copyableRatings` should be extended to decide whether it is a stable trait (copy) or day-specific (exclude) — noted in Dependencies.
+**n/a.** `lib/schema.ts` (`MORNING_METRICS`, `EVENING_METRICS`, `DEFAULT_ENABLED_EVENING_METRICS`) is the single source of truth for _which fields exist and render_. This doc adds no field and no `Metric` variant, so schema is untouched — and deliberately so: adding a `Metric` variant would trip the `assertNever` seam in `checkin.tsx` (and force edits to the `metric.kind === 'scale'` filters in `trends.tsx` and `entry/[date].tsx`), which is exactly the churn a friction-reduction feature should avoid. `copyableRatings` enumerates rating keys explicitly rather than iterating the schema, because it must make a per-field _policy_ decision (which fields are volatile); this is intentional and is the one place the feature is not schema-generic. If a new `RatingKey` is added by another doc, `copyableRatings` should be extended to decide whether it is a stable trait (copy) or day-specific (exclude) — noted in Dependencies.
 
 ## Storage & guards
 
@@ -163,7 +163,7 @@ The clinical lens raised a real question: should each day record whether it was 
   - Historical `DayEntry` records are read-only inputs; **the prior entry object itself is never touched, only read** — "Same as last time" writes a _new_ entry for the current date through the existing `saveCheckin` merge, exactly as a manual check-in does.
   - No migrate-on-read is needed because no stored shape changes.
 - **Documented migrate-on-read template (for other docs in this set).** When a future doc _does_ add a persisted `Profile`/checkin field, follow this precedent: add it as an **optional** field, default it on read with `??`, and extend the corresponding `is*` guard to accept its presence or absence. Example (the deferred snooze-duration setting): `snoozeMinutes?: Minute` on `Profile`, read as `profile.snoozeMinutes ?? 60`, decoded by an `isProfile` that tolerates the field being absent. This is the cleanest migration shape in this feature set; reuse it verbatim.
-- **Backup parse (`lib/export.ts`).** `Backup = { exportedAt; profile; doses; entries }` is unchanged — no new top-level key, no new persisted field — so `buildBackup` / `parseBackup` and their round-trip test remain valid untouched.
+- **Backup parse (`lib/backup.ts`).** `Backup = { exportedAt; profile; doses; entries }` is unchanged — no new top-level key, no new persisted field — so `buildBackup` / `parseBackup` and their round-trip test remain valid untouched.
 
 ## UI touch points
 
@@ -177,12 +177,12 @@ Every seam that must change, with the non-generic ones flagged.
   const prior = mostRecentSession(entries, session, date);
   // prior is a PriorCheckin discriminated union — narrow, don't assert.
   if (prior !== undefined) {
-    // EMPTY_DRAFT resets doseTaken, sleepHours, sideEffects ([]), notes ('')
-    // for free; only scale ratings are carried forward.
+    // EMPTY_DRAFT restores doseTaken, sleepHours, sideEffects ({}), notes ('')
+    // to their fresh defaults; only scale ratings are carried forward.
     setDraft({ ...EMPTY_DRAFT, ratings: copyableRatings(prior) });
   }
   ```
-  This is the enforcement point for the volatile-field exclusions: because we spread `EMPTY_DRAFT` and overwrite **only** `ratings`, `doseTaken` returns to its unset starting state, `sleepHours` to undefined, and `sideEffects`/`notes` to empty — regardless of what the prior day held. `draftFromMorning`/`draftFromEvening` are **not** used for prefill (they remain the edit-flow hydrators).
+  This is the enforcement point for the volatile-field exclusions: because we spread `EMPTY_DRAFT` and overwrite **only** `ratings`, `doseTaken` returns to its default (`true`), `sleepHours` to its default, and `sideEffects` (`{}`) / `notes` (`''`) to empty — regardless of what the prior day held. `draftFromMorning`/`draftFromEvening` are **not** used for prefill (they remain the edit-flow hydrators).
 - Button label is session-parameterized: `session === 'morning' ? 'Start from your last morning check-in' : 'Start from your last evening check-in'`. Do not hardcode the evening wording.
 - After a successful prefill, scroll the form to (or otherwise surface) the Save action, so "glance-and-confirm" does not require a manual scroll to find the button that completes the loop.
 - `handleSave`, the `renderMetric` switch (`Toggle`/`ScaleSelector`/`Stepper`/`Chips`/inline-`TextInput`, `default: assertNever(metric)`), and `draftFrom*` are **otherwise untouched**. The existing `loadEntries()` effect already has `entries` in hand; capture it in state so both the edit-hydration effect and the prefill button can read it.
@@ -201,7 +201,7 @@ Every seam that must change, with the non-generic ones flagged.
 
 ## Export / report
 
-**n/a for the report body.** `lib/export.ts` accessors (`ratingAccessor`, `averageOf`, `rowsInRange`) and `buildReportHtml` are unchanged — the data they consume is identical in shape whether a day was logged manually or via prefill. `escapeHtml` usage and palette-derived colors stay exactly as they are.
+**n/a for the report body.** The `lib/metrics.ts` accessors (`ratingAccessor`, `averageOf`, `rowsInRange`) and `buildReportHtml` (`lib/report-html.ts`) are unchanged — the data they consume is identical in shape whether a day was logged manually or via prefill. `escapeHtml` usage and palette-derived colors stay exactly as they are.
 
 Honest caveats worth recording (not code changes):
 
@@ -284,7 +284,7 @@ Changes land in `lib/notifications.ts`, preserving its lazy-load discipline (`lo
 
 ## Test plan
 
-All new _logic_ lives in `lib/storage.ts`, inside the covered set (`lib/{types,schema,storage,export}.ts`), so coverage thresholds (lines/statements/functions 90, branches 85) are satisfied by testing the pure functions. New specs go in `lib/__tests__/storage.test.ts`, importing `{ describe, it, expect }` from `vitest`, using the sanctioned `as IsoDate` / `as IsoTimestamp` literal-fixture idiom.
+All new _logic_ lives in `lib/storage.ts`, inside the covered set (`lib/{types,schema,storage,backup,metrics,report-metrics,report-html,export,checkin,trends}.ts`), so coverage thresholds (lines/statements/functions 90, branches 85) are satisfied by testing the pure functions. New specs go in `lib/__tests__/storage.test.ts`, importing `{ describe, it, expect }` from `vitest`, using the sanctioned `as IsoDate` / `as IsoTimestamp` literal-fixture idiom.
 
 `mostRecentSession`:
 
@@ -300,7 +300,7 @@ All new _logic_ lives in `lib/storage.ts`, inside the covered set (`lib/{types,s
 - **morning:** returns `{ sleepQuality, wakingMood }` and contains **no** `doseTaken` and no `sleepHours` key (assert those are absent from the returned object / that a draft built from it has `doseTaken` reset).
 - **evening:** copies the set scale ratings and **omits `sideEffects` and `notes` entirely** — assert the returned object has no such keys even when the prior evening had non-empty side effects and a note.
 - **evening with sparse ratings:** an undefined optional rating (e.g. `libido` unset) is omitted, not carried as `undefined` (exactOptionalPropertyTypes).
-- a round-trip check that `{ ...EMPTY_DRAFT, ratings: copyableRatings(prior) }` yields a draft with `doseTaken` at its empty default, `sleepHours` undefined, `sideEffects` `[]`, `notes` `''`.
+- a round-trip check that `{ ...EMPTY_DRAFT, ratings: copyableRatings(prior) }` yields a draft with `doseTaken` at its default (`true`), `sleepHours` at its default, `sideEffects` `{}`, `notes` `''`.
 
 Fixture shape:
 
@@ -310,7 +310,7 @@ const entries: Readonly<Record<IsoDate, DayEntry>> = {
     date: '2026-07-15' as IsoDate,
     evening: {
       ratings: { mood: 4 },
-      sideEffects: ['nausea'],
+      sideEffects: { nausea: { severity: 'mild' } },
       notes: 'stressful day',
       completedAt: '2026-07-15T20:00:00.000Z' as IsoTimestamp,
     },
@@ -337,7 +337,7 @@ const entries: Readonly<Record<IsoDate, DayEntry>> = {
 - **No `as` on untrusted data:** production code mints no branded value by cast and reads no OS payload by cast (`isRecord`/`isSession` predicates instead). The sole assertions are `as IsoDate` / `as IsoTimestamp` on known-valid literals inside test fixtures (`type-coverage --ignore-as-assertion`).
 - **No `@ts-*` / `eslint-disable`:** none needed; the design is expressible in strict TS.
 - **`noPropertyAccessFromIndexSignature`:** `parseReminderData` reads `data['session']` / `data['kind']` via bracket access on the `Record<string, unknown>` predicate result.
-- **Exhaustive switch / `assertNever`:** no `Metric` variant added, so existing `assertNever` seams stay green. The two-arm ternaries (`copyableRatings` session split; routing snooze-vs-navigate) are total over a closed two-member union and an open OS string with a correct catch-all, respectively — the doc states why `switch`+`assertNever` is not the right shape there.
+- **Exhaustive switch / `assertNever`:** no `Metric` variant added, so the existing `assertNever` seam (`checkin.tsx`) stays green. The two-arm ternaries (`copyableRatings` session split; routing snooze-vs-navigate) are total over a closed two-member union and an open OS string with a correct catch-all, respectively — the doc states why `switch`+`assertNever` is not the right shape there.
 - **`exactOptionalPropertyTypes`:** `copyableRatings`'s evening branch uses conditional spreads to omit undefined optionals; `PriorCheckin.checkin` reuses the existing interfaces verbatim.
 - **100% type-coverage:** every value in the new code has an inferred or annotated concrete type; the discriminated `PriorCheckin` return and the guarded `parseReminderData` keep call sites fully typed with no widening.
 

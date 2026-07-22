@@ -7,8 +7,8 @@
 The whole point of this app is that a non-stimulant ADHD med accumulates over weeks and the
 signal is the _trend_ — but the trend only becomes actionable at a **provider visit**. Right
 now the app has no concept of an appointment. The three mission pillars (collect → log →
-hand to provider) are anchored to nothing: the report always spans a rolling window
-(`RANGE_OPTIONS = [7,14,30]`), which rarely lines up with the real question the provider asks —
+hand to provider) are anchored to nothing: the report always spans the full logged history
+(`loggedDateRange`, in `lib/storage.ts`), which rarely lines up with the real question the provider asks —
 _"how have you been since I last saw you?"_
 
 Concretely:
@@ -39,7 +39,7 @@ without a meaningful scope.
 - Settings UI to add, list, and **delete** visits, structurally identical to the dose-change
   log plus a delete affordance the reminder wiring requires.
 - Provide `sinceLastVisitRange(visits, today, startDate)` as pure, tested `lib/` logic that
-  the report overhaul (doc 01) consumes for a "Since last visit" / "Since starting" preset.
+  the landed report overhaul (doc 06 — see `docs/DECISIONS.md`) consumes for a "Since last visit" / "Since starting" preset.
   It **always** returns a range — never `null` — anchoring on `startDate` when there is no
   past visit.
 - Provide `adherenceInRange(rows)` as pure, tested `lib/` logic so the scoped provider report
@@ -48,7 +48,7 @@ without a meaningful scope.
 - Optional one-off, single-fire "appointment soon — export your report" reminder for a
   future-dated visit, which never surfaces a fresh permission prompt.
 - Optional visit markers on Trends, reusing the `markersRow` dot pattern.
-- Extend the JSON backup to round-trip visits, wire `importJsonBackup` to persist them, and
+- Extend the JSON backup to round-trip visits, wire `restoreBackup` to persist them, and
   wire `clearAllData` to purge them.
 
 **Non-goals**
@@ -89,8 +89,9 @@ export interface Visit {
 ```
 
 `note` is optional and, under `exactOptionalPropertyTypes`, must be **omitted** when absent —
-never set to `undefined`. Construction uses a conditional spread, the same idiom
-`app/checkin.tsx`'s `handleSave` already uses for evening ratings:
+never set to `undefined`. Construction uses a conditional spread, the same idiom the check-in
+construction in `lib/checkin.ts` (`eveningFromDraft`) and `parseEveningCheckin` in
+`lib/storage.ts` already use for optional evening `notes`:
 
 ```ts
 const visit: Visit = { date, ...(note !== undefined ? { note } : {}) };
@@ -117,7 +118,7 @@ export type ReportRange =
 ```
 
 `sinceLastVisitRange` (defined in `lib/storage.ts`, see below) returns `ReportRange` — always
-a range, never `null`. `anchor` drives the preset label in doc 01
+a range, never `null`. `anchor` drives the preset label in the landed report (doc 06)
 (`'since-visit'` → "Since last visit", `'since-start'` → "Since starting the medication"),
 consumed through an exhaustive `switch` ending in `assertNever`.
 
@@ -138,7 +139,7 @@ compiling unchanged. Visits are logged from Settings, exactly like `DoseChange`,
 
 ## Storage & guards
 
-Add to `lib/storage.ts`, mirroring `isDoseChange` / `parseDoseChangeList` / `appendDoseChange`
+Add to `lib/storage.ts`, mirroring `isDoseChange` / `isDoseChangeList` / `appendDoseChange`
 **exactly** — reusing the file's existing `isRecord`, `isUnknownArray`, and `readJson` helpers
 rather than re-deriving narrowing inline.
 
@@ -180,6 +181,11 @@ Three deliberate corrections over the first draft, all to match the codebase's r
   helper own `JSON.parse` and its failure path — one parse-failure path in the codebase, not
   two. `loadVisits` routes through `readJson`, making the "mirrors `DoseChange` exactly" claim
   literally true.
+
+(Accuracy note: `loadDoseChanges` in the current `lib/storage.ts` does a _tolerant_ per-element
+`readJson` + `.filter(isDoseChange)` rather than an all-or-nothing `parseX`; there is no
+`parseDoseChangeList`. `parseVisitList` above is stricter by design — reconcile the two if strict
+consistency matters.)
 
 Load / save / append / remove:
 
@@ -242,6 +248,12 @@ not today), and the Settings "clear all data" handler must call
 expecting a full on-device clear is not left with surviving `Visit` records or a stale
 scheduled local notification pointing at a deleted visit date.
 
+> **Accuracy note (flag).** As of this pass there is **no** `clearAllData` function and no
+> "clear all data" handler anywhere in the codebase (`lib/storage.ts` exposes no full-wipe
+> primitive; Settings has no clear/reset control). This section presumes a full-wipe path that
+> does not yet exist — whoever builds it must include `VISITS_KEY` and the pre-wipe
+> `cancelAllVisitReminders` call described here.
+
 **Backward compatibility.** Purely additive:
 
 - The `"visits"` key never existed, so `parseVisitList(null)` returning
@@ -283,8 +295,11 @@ usage are all unaffected.
 
 ## Export / report
 
-`lib/export.ts` changes, coordinated with **doc 01 (provider-report-overhaul)**, which owns
-the range-preset selector and the report layout.
+`lib/backup.ts` (the `Backup` type + `buildBackup`/`parseBackup`) and `lib/report-html.ts`
+(`buildReportHtml`) changes, coordinated with the **landed provider-report overhaul (doc 06 —
+see `docs/DECISIONS.md`)**, which owns the report layout. (Flag: doc 06 shipped a single
+full-logged-span report with **no** range-preset selector, so the "Since last visit" preset and
+its selector would be net-new work, not an addition to an existing selector.)
 
 - **`Backup` gains a `visits` field; `buildBackup` stays synchronous.** To settle the draft's
   ambiguity: `buildBackup` does **not** become `async` and does **not** self-load — it keeps
@@ -292,12 +307,13 @@ the range-preset selector and the report layout.
   site `await`s `loadVisits()` and passes the result in.
 
   ```ts
+  // in lib/backup.ts; note profile is nullable in the current type
   interface Backup {
-    exportedAt: IsoTimestamp;
-    profile: Profile;
-    doses: readonly DoseChange[];
-    entries: Readonly<Record<IsoDate, DayEntry>>;
-    visits: readonly Visit[];
+    readonly exportedAt: IsoTimestamp;
+    readonly profile: Profile | null;
+    readonly doses: readonly DoseChange[];
+    readonly entries: Readonly<Record<IsoDate, DayEntry>>;
+    readonly visits: readonly Visit[];
   }
   ```
 
@@ -309,23 +325,29 @@ the range-preset selector and the report layout.
 
   `raw['visits']` is `unknown`; `isVisitList` narrows it — no cast of untrusted data.
 
-- **`importJsonBackup` must persist the parsed visits.** Parsing alone is not enough: on a
-  successful parse the import path must call `saveVisits(parsed.value.visits)` alongside the
-  existing `saveProfile`/`saveDoseChanges`/`saveEntries` writes, or restoring a backup (old
-  _or_ new) silently drops the user's visit history. It should also reschedule reminders for
-  any future-dated imported visits (same gated path as the add flow), so a restore behaves
-  like the adds that produced it.
+- **`restoreBackup` must persist the parsed visits.** Parsing alone is not enough — and note
+  that in the current code `importJsonBackup` (in `lib/export.ts`) only _parses_, returning
+  `Parsed<Backup>`; the actual disk writes live in `restoreBackup` (in `lib/storage.ts`), which
+  today calls `saveProfile`/`saveDoseChanges`/`saveEntries` via `Promise.all`. That function
+  must add `saveVisits(backup.visits)`, or restoring a backup (old _or_ new) silently drops the
+  user's visit history. The restore flow should also reschedule reminders for any future-dated
+  imported visits (same gated path as the add flow), so a restore behaves like the adds that
+  produced it.
 
 - **The report gains a "Since last visit" / "Since starting" range option.**
   `sinceLastVisitRange(visits, today, profile.startDate)` yields a `ReportRange`; its `.range`
   feeds `lastNDates` / `rowsInRange` exactly as the numeric presets do (range-agnostic once
-  given `{ start, end }`). Because the helper is total, **doc 01's preset is always enabled** —
-  there is no disabled state to design — and its label follows `.anchor`.
+  given `{ start, end }`). `lastNDates` lives in `lib/storage.ts`, `rowsInRange` in `lib/metrics.ts`.
+  Because the helper is total, **the report's preset is always enabled** — there is no disabled
+  state to design — and its label follows `.anchor`.
 
-- **Adherence summary within the scoped range (required).** This doc adds a pure, tested
-  helper and requires doc 01 to render its output as a descriptive line in the scoped report,
-  so a provider reading a "since last visit" trend can distinguish "medication isn't working"
-  from "doses were frequently skipped":
+- **Adherence summary within the scoped range.** (Accuracy note: the landed doc 06 **already**
+  computes and renders adherence — `computeAdherence` and `adherenceInWindow` in
+  `lib/report-metrics.ts`, surfaced by `buildReportHtml`. The `adherenceInRange` helper below
+  overlaps those; it should be reconciled with — likely folded into — the existing helpers
+  rather than added anew.) This doc adds a pure, tested helper so a provider reading a "since
+  last visit" trend can distinguish "medication isn't working" from "doses were frequently
+  skipped":
 
   ```ts
   export function adherenceInRange(rows: readonly DayEntry[]): {
@@ -348,16 +370,16 @@ the range-preset selector and the report layout.
   mornings, not calendar days, so an unlogged day is never silently misrepresented as a
   skipped dose — the count stays a fact, not an inference.
 
-- **`buildReportHtml` renders a "Visits in range" `<ul>`** as the dose-change section's
+- **`buildReportHtml` (in `lib/report-html.ts`) renders a "Visits in range" `<ul>`** as the dose-change section's
   sibling, listing each visit date and, if present, its note. **Every field runs through
   `escapeHtml`** — dates and free-text notes alike. Colors come only from the shared `palette`.
   Visit rows are descriptive lines, never annotated with any computed delta or judgment.
 
-- **Pre-existing report gaps to hand to doc 01 (flag, not fix here):** side-effect
-  severity/adherence context and free-text `notes` are still absent from the exported report,
-  and averages are one grand mean over the range. Severity is most useful exactly in the
-  window since the last dose adjustment, so doc 01 should close these when it owns the report
-  body. Out of scope for 06 beyond the adherence helper above.
+- **Report gaps this bullet originally flagged are now closed by the landed doc 06 (accuracy
+  update):** side-effect severity, adherence context, free-text `notes`, and per-dose-period
+  before/after averages (rather than one grand mean) are **all** now rendered by
+  `buildReportHtml` (see `lib/report-html.ts` and `lib/report-metrics.ts`). The original hand-off
+  to a still-pending report doc is obsolete; nothing remains to flag here.
 
 ## Notifications
 
@@ -441,8 +463,8 @@ rather than asserting. Fixtures use the sanctioned `as IsoDate` literal idiom.
 - `buildBackup(profile, doses, entries, visits)` includes `visits`; `parseBackup` round-trips
   them.
 - `parseBackup` on a backup **without** a `visits` field ⇒ `visits: []`.
-- `importJsonBackup` **persists** visits: assert it produces a `saveVisits` write of the parsed
-  value (mock the storage write), proving the import flow — not just the pure parser — carries
+- `restoreBackup` **persists** visits: assert it produces a `saveVisits` write of the parsed
+  value (mock the storage write), proving the restore flow — not just the pure parser — carries
   the field to disk.
 - `adherenceInRange`: counts only logged mornings; `{ takenDays, loggedMornings }` ignores
   days with no morning check-in; all-taken and all-skipped edges.
@@ -469,22 +491,21 @@ rather than asserting. Fixtures use the sanctioned `as IsoDate` literal idiom.
   discipline on parse.
 - **Exhaustive switch / `assertNever`**: the `Metric` union is unchanged, so no check-in
   `switch` arm is added. This feature **does** introduce one new exhaustiveness obligation —
-  doc 01's `ReportRange` label mapper `switch`es on `anchor` and ends in `assertNever(range)`,
+  the report's `ReportRange` label mapper `switch`es on `anchor` and ends in `assertNever(range)`,
   so adding a future anchor variant fails to compile until the label is handled.
 - **`noPropertyAccessFromIndexSignature`**: index access (`value['date']`, `value['note']`,
   `raw['visits']`) used throughout.
 
 ## Dependencies & sequencing
 
-- **Enables doc 01 (provider-report-overhaul):** the "Since last visit" / "Since starting"
-  preset is the headline consumer of `sinceLastVisitRange`, and the **adherence summary line**
-  (`adherenceInRange`) is a firm requirement doc 01 must render inside the scoped report — this
-  doc ships both primitives so the confound cannot slide silently into doc 01 unstated. Doc 01
-  owns the preset selector, the label mapping (`anchor` → text), the "Visits in range" HTML
-  block, and the adherence line placement. **Doc 01 must keep the default landing preset
-  unchanged** so the fast path (open Settings → export) gains no extra required selection step
-  just because a new option exists. Land the `Visit` type + storage first, then the report
-  preset.
+- **Extends the landed provider report (doc 06 — see `docs/DECISIONS.md`):** the "Since last
+  visit" / "Since starting" preset is the headline consumer of `sinceLastVisitRange`, and the
+  **adherence summary line** is already partly served by doc 06's `computeAdherence` (reconcile
+  `adherenceInRange` with it). Whoever wires the preset owns the (net-new) preset selector, the
+  label mapping (`anchor` → text), the "Visits in range" HTML block, and the adherence line
+  placement. **The report must keep the default landing range unchanged** so the fast path (open
+  Settings → export) gains no extra required selection step just because a new option exists.
+  Land the `Visit` type + storage first, then the report preset.
 - **Independent of the check-in/schema docs:** because `Visit` is not a `Metric`, this feature
   never touches the check-in seam and can land in any order relative to metric-adding docs.
 - **Trends markers** are an optional follow-on depending only on `loadVisits` existing.
@@ -535,7 +556,7 @@ rather than asserting. Fixtures use the sanctioned `as IsoDate` literal idiom.
   aren't misread as skipped doses.
 - **Suggestions:** PGI-C global impression logged as a named follow-on; same-day-as-appointment
   check-in edge documented (visible in raw History, not summarized into a delta); severity/notes
-  report gap flagged as a doc 01 dependency.
+  report gap flagged as a doc 06 dependency.
 
 ### Strict-TypeScript architect — approve-with-changes
 
@@ -553,7 +574,7 @@ rather than asserting. Fixtures use the sanctioned `as IsoDate` literal idiom.
 - **Must-fix:** none.
 - **Suggestions:** applied — nudge is single-fire with terse copy and must never trigger a
   fresh permission prompt mid-flow; Settings uses a native date picker over free-text ISO
-  entry; added a doc 01 dependency note that the default landing preset must not change (no new
+  entry; added a doc 06 dependency note that the default landing preset must not change (no new
   required selection step on the fast export path). No changes touch the daily check-in loop.
 
 ### Data-model / migration + privacy + scope — approve-with-changes
@@ -561,8 +582,9 @@ rather than asserting. Fixtures use the sanctioned `as IsoDate` literal idiom.
 - **Must-fix (`clearAllData`):** applied. `clearAllData` now purges `VISITS_KEY`, and the
   Settings clear handler calls `cancelAllVisitReminders` before the wipe so no stale local
   notification survives.
-- **Must-fix (`importJsonBackup` write-back):** applied. Import now persists parsed visits via
-  `saveVisits`, with a test asserting the write (not just the pure parser).
+- **Must-fix (backup write-back):** applied. Restore now persists parsed visits via
+  `saveVisits` (in `restoreBackup`, `lib/storage.ts`), with a test asserting the write (not just
+  the pure parser).
 - **Suggestions:** ID-collision risk resolved by making `appendVisit` dedupe on date (date is
   the reminder ID key); delete affordance explicitly added to the Settings Visits section to
   back "cancel on delete"; Non-goals now state the reminder requests no extra OS permission and

@@ -108,7 +108,7 @@ components.
   progress-toward-expected-effect ("should be kicking in soon"), the exact implied clinical timeline
   the Non-goals forbid. The chip states elapsed time; the copy stays generic; they are visually
   separated.
-- **Report cover (`lib/export.ts`)** — append "· on this dose {N} weeks" to the existing
+- **Report cover (`lib/report-html.ts`)** — append "· on this dose {N} weeks" to the existing
   current-dose/started line. `escapeHtml` the interpolated count (integer).
 
 No check-in, schema, or storage seam is touched.

@@ -141,7 +141,7 @@ on read, never crashes — consistent with `parseEntriesTolerant`'s posture.
 (`'profile'`, `'doses'`, `'entries'`). Add `measurements: 'measurements'` to that object — do **not**
 introduce a `@adhd-log/…` prefix scheme for one key.
 
-## Backup (`lib/export.ts`)
+## Backup (`lib/backup.ts`)
 
 Extend the `Backup` interface additively and thread through the three call sites:
 
@@ -155,8 +155,8 @@ export interface Backup {
 }
 ```
 
-`buildBackup` gains a `measurements` parameter → update its single call site (`saveCheckin`-adjacent
-backup build in Settings) to pass `loadMeasurements()`'s result.
+`buildBackup` gains a `measurements` parameter → update its single call site (the `handleExportJson`
+backup build in `app/(tabs)/settings.tsx`) to pass `loadMeasurements()`'s result.
 
 `parseBackup` must default a missing `measurements` **explicitly** (panel — TS lens): keep
 `isMeasurementList` honest by having it _reject_ `undefined`, and put the default in `parseBackup`,
@@ -169,8 +169,9 @@ if (rawM !== undefined && !isMeasurementList(rawM))
 const measurements = rawM === undefined ? [] : rawM; // pre-feature backups → []
 ```
 
-**`restoreBackup` is a fourth persisted write (panel — scope lens must-fix).** It currently writes
-exactly three keys via `Promise.all([saveProfile, saveDoseChanges, saveEntries])`. Add
+**`restoreBackup` (in `lib/storage.ts`, alongside the `save*` writers) is a fourth persisted write
+(panel — scope lens must-fix).** It currently writes exactly three keys via
+`Promise.all([saveProfile, saveDoseChanges, saveEntries])`. Add
 `saveMeasurements(backup.measurements)` to that `Promise.all`, or a restore silently drops every
 vital. Because the field defaults to `[]`, old backups import cleanly and new backups remain readable
 data.
@@ -192,7 +193,7 @@ Additionally, when the user logs a **dose change**, offer an optional "add a rea
 — this is where the research shows vitals are actually captured (at the step), and it costs one tap
 to skip.
 
-## Report (`lib/export.ts`)
+## Report (`lib/report-html.ts`)
 
 A new descriptive section, ordered after the before/after-dose section (vitals contextualize the same
 changes). One small table per measurement kind present, rows sorted by date, columns `Date · Value`,
@@ -226,7 +227,8 @@ RN-free logic is fully covered:
 4. **Report render** — exhaustive per-kind rendering; empty → section absent; a reading dated on a
    dose-change date gets the annotation.
 5. **assertNever** — a compile-time test (or a cast-guarded runtime one) proving the render switch is
-   exhaustive, matching the `cycleSeverity` pattern.
+   exhaustive, matching the `assertNever` / compile-time-exhaustiveness pattern in
+   `lib/__tests__/types.test.ts`.
 
 Coverage stays ≥ thresholds; the Settings/Trends RN views are not unit-tested (per `CLAUDE.md`).
 

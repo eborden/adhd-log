@@ -56,7 +56,7 @@ export type ContextTag = (typeof CONTEXT_TAGS)[number];
 ```ts
 export interface EveningCheckin {
   readonly ratings: Partial<Record<EveningRatingKey, Rating>>; // unchanged (keyed record)
-  readonly sideEffects: readonly SideEffect[];
+  readonly sideEffects: SideEffectReports; // unchanged (keyed severity record)
   readonly contextTags?: readonly ContextTag[]; // new — absence === "none recorded"
   readonly notes?: string;
   readonly completedAt: IsoTimestamp;
@@ -148,9 +148,9 @@ return (
 
 ## UI touch points
 
-### `app/checkin.tsx` — the non-generic seam (four coordinated edits + a collapse wrapper)
+### `app/checkin.tsx` + `lib/checkin.ts` — the non-generic seam (four coordinated edits + a collapse wrapper)
 
-1. **Draft field** — add `readonly contextTags: readonly ContextTag[]` to `interface Draft`; add `contextTags: []` to `EMPTY_DRAFT` and to `draftFromMorning` (morning has no tags → `[]`).
+1. **Draft field** (in `lib/checkin.ts`, where `Draft` and its constructors live — not `app/checkin.tsx`) — add `readonly contextTags: readonly ContextTag[]` to `interface Draft`; add `contextTags: []` to `EMPTY_DRAFT` and to `draftFromMorning` (morning has no tags → `[]`).
 2. **renderMetric arm** — the `case 'chips':` now narrows on `metric.key`, and the `contextTags` arm renders inside a collapsed disclosure (see below):
    ```ts
    case 'chips':
@@ -176,7 +176,7 @@ return (
    ```ts
    ...(draft.contextTags.length > 0 ? { contextTags: draft.contextTags } : {}),
    ```
-4. **draftFromEvening hydration** — `contextTags: checkin.contextTags ?? [],`.
+4. **draftFromEvening hydration** (in `lib/checkin.ts`) — `contextTags: checkin.contextTags ?? [],`.
 
 ### Friction / completion: collapsed-by-default (Mobile-UX must-fix)
 
