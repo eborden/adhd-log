@@ -31,9 +31,24 @@ automating "tap Import → navigate the system document picker → pick the righ
 
 ## Workflow
 
-**Prerequisite:** an Android emulator running with the app already installed (`adb devices`
-shows it). If the app process needs a cold start after seeding (see step 4), a debug build also
-needs Metro reachable: `npm start` (or `npm run android`'s underlying `expo start`) running, and
+**Prerequisite:** an Android emulator running with a **debuggable** app build already installed
+(`adb devices` shows it) — see step 4 for why this matters. A build downloaded via `npm run
+apk:ci` (the latest CI release APK — see `docs/CI.md`) does **not** qualify: release builds are
+never debuggable, so `run-as` fails outright with `run-as: package not debuggable` regardless of
+keystore. If that's what's installed, `adb uninstall com.adhdlog.app` (a release and a debug
+build are signed with different keystores, so installing over one with the other fails with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` anyway) and `npm run android` (`expo run:android`) to build
+and install a local debug build of the same source instead — same UI, just seedable. Confirmed
+hitting this exact wall: a CI-downloaded release APK installed and ran fine, but `run-as` refused
+it.
+
+If working from a git worktree, run `npm ci` there first — a worktree doesn't inherit
+`node_modules` from the main checkout, and without it `expo run:android`'s Gradle/native build
+still succeeds (it resolves packages by walking up to a parent checkout), but Metro fails to
+serve the JS bundle at runtime with `UnableToResolveError: ... ./node_modules/expo-router/entry`.
+
+If the app process needs a cold start after seeding (see step 4), a debug build also needs Metro
+reachable: `npm start` (or `npm run android`'s underlying `expo start`) running, and
 `adb -s <serial> reverse tcp:8081 tcp:8081` — without this, a force-stopped debug build shows
 "Unable to load script" instead of the app. Confirmed by hitting this exact wall while building
 this skill.
@@ -71,13 +86,21 @@ this skill.
    ```bash
    adb -s <serial> shell "run-as <package> sqlite3 databases/RKStorage" < /tmp/seed.sql
    adb -s <serial> shell am force-stop <package>
-   adb -s <serial> shell am start -n <package>/.MainActivity
+   adb -s <serial> shell am start -a android.intent.action.VIEW \
+     -d "adhdlog://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081"
    ```
 
    This repo's package id is `com.adhdlog.app`. `run-as` requires the installed build to be
    debuggable (true for anything built via `npm run android` / Expo dev client / `npm run apk` in
    its default debug configuration) — if `run-as` itself fails with a permission error, the
-   installed build isn't debuggable and this approach doesn't apply.
+   installed build isn't debuggable and this approach doesn't apply (see the prerequisite note
+   above — a CI-downloaded release APK hits this every time).
+
+   Relaunch through the dev-client deep link, not a plain `am start -n <package>/.MainActivity` —
+   the latter can leave the app on a black screen indefinitely (process starts, but never
+   requests a bundle from Metro), whereas the deep link's `url` param tells the dev client
+   exactly where to fetch it from. `10.0.2.2` is the emulator's alias for the host machine; swap
+   in the real Metro host if driving a physical device instead.
 
    The force-stop + restart is the Android equivalent of the web skill's "reload the page" — a
    screen that's already mounted may not re-read `AsyncStorage` on its own, so don't skip it.
