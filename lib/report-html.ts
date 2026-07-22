@@ -152,7 +152,7 @@ function scaleAnchorCaption(metric: ScaleMetric): string {
  */
 function sparkBarClass(value: Rating | undefined, direction: ScaleDirection): string {
   if (value === undefined) return 'spark-none';
-  if (direction === 'neutral') return 'spark-mid';
+  if (direction === 'neutral') return 'spark-unbiased';
   const better = direction === 'higher-better' ? value >= 4 : value <= 2;
   const worse = direction === 'higher-better' ? value <= 2 : value >= 4;
   if (better) return 'spark-good';
@@ -610,6 +610,8 @@ export function buildReportHtml(
       .spark-good { background: ${palette.greenStrong}; }
       .spark-mid { background: ${palette.ochreStrong}; }
       .spark-bad { background: ${palette.clayStrong}; }
+      /* No better/worse axis at all (Appetite, Libido) — grayscale, not a rating-spectrum hue. */
+      .spark-unbiased { background: ${palette.warm500}; }
       .spark-none { background: ${palette.warm300}; }
       .spark-line { display: inline-block; white-space: nowrap; }
       /* Bar width scales to the range length (see sparkDensityClass) so a long range stays compact
