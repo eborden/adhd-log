@@ -3,6 +3,68 @@
 Running log of design decisions made after [`PLANNING-v0.md`](PLANNING-v0.md), which is
 frozen. Newest first.
 
+## Weekly global-impression check-in (2026-07-22)
+
+**Problem:** Every input the app collects is a _daily_ artifact — nothing captured the
+patient's own week-over-week sense of change, the axis a provider titrates against. See
+[`docs/pending/13-weekly-global-impression.md`](pending/13-weekly-global-impression.md).
+
+**Decision:** Implemented the doc as specified — a coarse 3-way Patient Global Impression of
+Change (`worse | same | better`), rated once per week for the most recently _completed_ ISO
+week, with an optional note.
+
+- **Types** (`lib/types.ts`): `WEEKLY_IMPRESSIONS`/`WeeklyImpression` literal union;
+  `WeeklyCheckin { weekOf, overall, note?, completedAt }`; `Profile` gains one optional
+  `weeklyReminder?: TimeOfDay` field (additive, `enabledEveningMetrics` precedent — no forced
+  re-onboarding).
+- **Storage** (`lib/storage.ts`): `weekStart`/`lastCompletedWeekStart` (Monday-start ISO week,
+  built on the existing guard-and-throw `addDays`/`parseIsoDate`); guards
+  `isWeeklyImpression`/`isWeeklyCheckin`/`isWeeklyRecord` (the last enforces map-key ===
+  `entry.weekOf`, and rejects a structurally valid but non-Monday `weekOf`); `parseWeekly`;
+  `loadWeekly`/`saveWeekly`/`saveWeeklyCheckin` (upsert-by-week, last-write-wins for the current
+  cycle only). New `"weekly"` AsyncStorage key; absent on read → `{}`, no migration.
+- **Schema** (`lib/schema.ts`): `WEEKLY_IMPRESSION_LABELS` label map, `type`-only import of
+  `WeeklyImpression` (the value is iterated only where needed, avoiding an unused-import
+  failure under `--max-warnings 0`).
+- **UI:** new `app/weekly.tsx` (peer of `checkin.tsx`, fully local state, no shared `Draft`) and
+  `components/WeeklyImpressionPicker.tsx` (three theme-token-only choice buttons). `app/checkin.tsx`
+  is untouched — no `Metric` variant added, so its `assertNever(metric)` arm stays intact. A
+  `WeeklyCard` on `app/(tabs)/index.tsx`, below both `SessionCard`s, is self-resolving with no
+  dismiss chrome: an unlogged week shows a quiet one-line prompt; a logged week collapses to
+  "Last week: {label}" with a small edit affordance. Nothing to dismiss, so it can't re-nag on
+  cold start.
+- **Report** (`lib/report-html.ts`): `weeklyAdherence`/`doseChangeInWeek` (the two confounders a
+  provider needs beside a self-rating) and `buildWeeklyTimelineHtml`, inserted after the
+  dose-change list. `impressionGlyph` is an exhaustive switch (`▼`/`▬`/`▲`) so a fourth impression
+  fails to compile until every consumer handles it. Chips use one neutral accent (no good/bad
+  rating hue — this is the patient's own word, not a judgment), distinguished only by the glyph.
+  `buildReportHtml` gained a `weekly` parameter (after `entries`, before `rangeStart`).
+- **Backup** (`lib/backup.ts`): `Backup` grows `weekly`. `buildBackup` takes it as a fourth
+  argument; `parseBackup` treats a **missing** `weekly` key as `{}` (a pre-#13 legacy export) but
+  still hard-fails a **present-but-malformed** one — the first missing-key-tolerant branch in
+  `parseBackup`, established here for future doc's to reuse. `restoreBackup` writes it via
+  `saveWeekly` alongside the existing profile/doses/entries `Promise.all`.
+- **Notifications** (`lib/notifications.ts`): weekly reminder is a `Calendar`-weekday trigger
+  (Monday) scheduled only when `profile.weeklyReminder` is set; `notificationKindFromResponse`
+  guard (no `as`) lets the tap listener route `'weekly'` → `app/weekly.tsx` without overloading
+  `Session`. `app/(tabs)/settings.tsx` gained a Toggle + hour Stepper so the reminder is actually
+  reachable (the doc specified the storage/scheduling plumbing but not a way to opt in); the
+  weekly reminder's minute is fixed at `:30` (daily reminders are always `:00`), which
+  deterministically rules out the doc's flagged same-moment collision rather than merely reducing
+  its odds.
+- Golden report fixture HTML/backup snapshots (`lib/__fixtures__/reports/*`) regenerated via
+  `vitest -u` — the only content drift is the new (always-emitted) `.impression-chip` stylesheet
+  rule and an empty section placeholder, since every scenario's `weekly` map is empty.
+
+**Deviations from the doc:** two symbols the doc referenced don't exist in this codebase and
+weren't introduced — `clearAllData`/`AsyncStorage.multiRemove` (no full-wipe feature exists; the
+only `multiRemove` caller is the test mock) and `cancelReminders()` (no prior caller;
+`scheduleReminders` already cancels the weekly trigger inline when `weeklyReminder` is removed).
+Both were already flagged as phantom references by the
+[`21-weekly-validated-instrument.md`](pending/21-weekly-validated-instrument.md) panel review.
+
+Supersedes and closes `docs/pending/13-weekly-global-impression.md`.
+
 ## Before/after dose-change comparison: sample size, adherence, and the in-app view (2026-07-22)
 
 **Problem:** The provider-report overhaul (below) shipped a before/after-dose-change section

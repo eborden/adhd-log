@@ -407,5 +407,31 @@
         "completedAt": "2026-07-19T12:00:00.000Z"
       }
     }
+  },
+  "weekly": {
+    "2026-06-01": {
+      "weekOf": "2026-06-01",
+      "overall": "worse",
+      "completedAt": "2026-07-19T12:00:00.000Z",
+      "note": "Forgot my dose a few times, feeling foggy."
+    },
+    "2026-06-08": {
+      "weekOf": "2026-06-08",
+      "overall": "same",
+      "completedAt": "2026-07-19T12:00:00.000Z",
+      "note": "Better on the days I remembered, but still missing some."
+    },
+    "2026-06-15": {
+      "weekOf": "2026-06-15",
+      "overall": "worse",
+      "completedAt": "2026-07-19T12:00:00.000Z",
+      "note": "Rough week, missed several doses."
+    },
+    "2026-06-22": {
+      "weekOf": "2026-06-22",
+      "overall": "same",
+      "completedAt": "2026-07-19T12:00:00.000Z",
+      "note": "About the same — adherence still inconsistent."
+    }
   }
 }

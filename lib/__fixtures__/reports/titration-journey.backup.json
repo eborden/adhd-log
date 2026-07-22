@@ -529,5 +529,43 @@
         "completedAt": "2026-07-19T12:00:00.000Z"
       }
     }
+  },
+  "weekly": {
+    "2026-03-02": {
+      "weekOf": "2026-03-02",
+      "overall": "worse",
+      "completedAt": "2026-07-19T12:00:00.000Z",
+      "note": "New medication — feeling sedated and dizzy."
+    },
+    "2026-03-09": {
+      "weekOf": "2026-03-09",
+      "overall": "same",
+      "completedAt": "2026-07-19T12:00:00.000Z",
+      "note": "Anxiety improving, energy still low."
+    },
+    "2026-03-16": {
+      "weekOf": "2026-03-16",
+      "overall": "worse",
+      "completedAt": "2026-07-19T12:00:00.000Z",
+      "note": "Bumped to 2mg — dizzy again for a few days."
+    },
+    "2026-03-23": {
+      "weekOf": "2026-03-23",
+      "overall": "better",
+      "completedAt": "2026-07-19T12:00:00.000Z",
+      "note": "Leveled out — mood and focus clearly better than last week."
+    },
+    "2026-03-30": {
+      "weekOf": "2026-03-30",
+      "overall": "same",
+      "completedAt": "2026-07-19T12:00:00.000Z",
+      "note": "Adjusting to 3mg, roughly steady."
+    },
+    "2026-04-06": {
+      "weekOf": "2026-04-06",
+      "overall": "better",
+      "completedAt": "2026-07-19T12:00:00.000Z",
+      "note": "Best week yet — sharp focus, calm, sleeping great."
+    }
   }
 }

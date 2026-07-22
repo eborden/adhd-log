@@ -4,22 +4,33 @@ import {
   isoTimestampNow,
   parseEntries,
   parseProfile,
+  parseWeekly,
 } from './storage';
-import type { DayEntry, DoseChange, IsoDate, IsoTimestamp, Parsed, Profile } from './types';
+import type {
+  DayEntry,
+  DoseChange,
+  IsoDate,
+  IsoTimestamp,
+  Parsed,
+  Profile,
+  WeeklyCheckin,
+} from './types';
 
 export interface Backup {
   readonly exportedAt: IsoTimestamp;
   readonly profile: Profile | null;
   readonly doses: readonly DoseChange[];
   readonly entries: Readonly<Record<IsoDate, DayEntry>>;
+  readonly weekly: Readonly<Record<IsoDate, WeeklyCheckin>>;
 }
 
 export function buildBackup(
   profile: Profile | null,
   doses: readonly DoseChange[],
   entries: Readonly<Record<IsoDate, DayEntry>>,
+  weekly: Readonly<Record<IsoDate, WeeklyCheckin>>,
 ): Backup {
-  return { exportedAt: isoTimestampNow(), profile, doses, entries };
+  return { exportedAt: isoTimestampNow(), profile, doses, entries, weekly };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -46,8 +57,18 @@ export function parseBackup(raw: unknown): Parsed<Backup> {
   if (!parsedEntries.ok) {
     return { ok: false, reason: 'Malformed backup: invalid entries' };
   }
+  // Backward compatibility: a pre-#13 backup has no "weekly" key at all — that's a legacy
+  // export, not corruption, so it parses to an empty map. A *present but malformed* value
+  // still fails the parse, same as every other field.
+  const weeklyRaw = raw['weekly'];
+  let weekly: Readonly<Record<IsoDate, WeeklyCheckin>> = {};
+  if (weeklyRaw !== undefined) {
+    const parsedWeekly = parseWeekly(weeklyRaw);
+    if (!parsedWeekly.ok) return { ok: false, reason: 'Malformed backup: invalid weekly' };
+    weekly = parsedWeekly.value;
+  }
   return {
     ok: true,
-    value: { exportedAt: raw['exportedAt'], profile, doses, entries: parsedEntries.value },
+    value: { exportedAt: raw['exportedAt'], profile, doses, entries: parsedEntries.value, weekly },
   };
 }

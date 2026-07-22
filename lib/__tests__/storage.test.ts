@@ -568,7 +568,7 @@ describe('persistence', () => {
         },
       },
     };
-    const backup: Backup = { exportedAt: isoTimestampNow(), profile, doses, entries };
+    const backup: Backup = { exportedAt: isoTimestampNow(), profile, doses, entries, weekly: {} };
 
     await restoreBackup(backup);
 
@@ -580,7 +580,13 @@ describe('persistence', () => {
   it('restoreBackup with a null profile leaves the existing profile untouched', async () => {
     const existing = buildProfile();
     await saveProfile(existing);
-    const backup: Backup = { exportedAt: isoTimestampNow(), profile: null, doses: [], entries: {} };
+    const backup: Backup = {
+      exportedAt: isoTimestampNow(),
+      profile: null,
+      doses: [],
+      entries: {},
+      weekly: {},
+    };
 
     await restoreBackup(backup);
 
@@ -599,7 +605,7 @@ describe('persistence', () => {
         evening: { ratings: { mood: 3 }, sideEffects: {}, completedAt: isoTimestampNow() },
       },
     };
-    const backup = buildBackup(profile, doses, entries);
+    const backup = buildBackup(profile, doses, entries, {});
 
     await restoreBackup(backup);
 

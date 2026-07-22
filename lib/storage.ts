@@ -6,6 +6,7 @@ import {
   MINUTES,
   MORNING_RATING_KEYS,
   SIDE_EFFECTS,
+  WEEKLY_IMPRESSIONS,
   type DayEntry,
   type Dose,
   type DoseChange,
@@ -29,6 +30,8 @@ import {
   type SideEffectReports,
   type SideEffectSeverity,
   type TimeOfDay,
+  type WeeklyCheckin,
+  type WeeklyImpression,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -110,10 +113,14 @@ export function isProfile(value: unknown): value is Profile {
     return false;
   }
   const enabledEveningMetrics = value['enabledEveningMetrics'];
-  return (
+  if (!(
     enabledEveningMetrics === undefined ||
     (isUnknownArray(enabledEveningMetrics) && enabledEveningMetrics.every(isEveningRatingKey))
-  );
+  )) {
+    return false;
+  }
+  const weeklyReminder = value['weeklyReminder'];
+  return weeklyReminder === undefined || isTimeOfDay(weeklyReminder);
 }
 
 export function isDoseChange(value: unknown): value is DoseChange {
@@ -126,6 +133,34 @@ export function isDoseChange(value: unknown): value is DoseChange {
 
 export function isDoseChangeList(value: unknown): value is readonly DoseChange[] {
   return isUnknownArray(value) && value.every(isDoseChange);
+}
+
+export function isWeeklyImpression(value: unknown): value is WeeklyImpression {
+  return typeof value === 'string' && (WEEKLY_IMPRESSIONS as readonly string[]).includes(value);
+}
+
+export function isWeeklyCheckin(value: unknown): value is WeeklyCheckin {
+  if (!isRecord(value)) return false;
+  const weekOf = value['weekOf'];
+  if (!isIsoDate(weekOf)) return false;
+  if (weekStart(weekOf) !== weekOf) return false; // must be a Monday week-start
+  if (!isWeeklyImpression(value['overall'])) return false;
+  if (!isIsoTimestamp(value['completedAt'])) return false;
+  const note = value['note'];
+  return note === undefined || typeof note === 'string';
+}
+
+/** Guard for the "weekly" store: Readonly<Record<IsoDate, WeeklyCheckin>>. */
+export function isWeeklyRecord(value: unknown): value is Readonly<Record<IsoDate, WeeklyCheckin>> {
+  if (!isRecord(value)) return false;
+  return Object.entries(value).every(
+    ([key, entry]) => isIsoDate(key) && isWeeklyCheckin(entry) && entry.weekOf === key,
+  );
+}
+
+export function parseWeekly(raw: unknown): Parsed<Readonly<Record<IsoDate, WeeklyCheckin>>> {
+  if (isWeeklyRecord(raw)) return { ok: true, value: raw };
+  return { ok: false, reason: 'Malformed weekly JSON' };
 }
 
 // A ratings sub-object: a record whose present keys (restricted to `keys`) each hold a Rating.
@@ -369,6 +404,19 @@ export function addDays(date: IsoDate, delta: number): IsoDate {
   return formatIsoDate(asDate);
 }
 
+/** Monday-start ISO week containing `date`, as an IsoDate. Pure. */
+export function weekStart(date: IsoDate): IsoDate {
+  const d = parseIsoDate(date); // Date at local midnight of `date`
+  const dow = d.getDay(); // 0=Sun..6=Sat
+  const deltaToMonday = dow === 0 ? -6 : 1 - dow; // Sun→prev Mon, else back to Mon
+  return addDays(date, deltaToMonday);
+}
+
+/** Monday of the most recently *completed* ISO week (the week before the one containing `today`). */
+export function lastCompletedWeekStart(today: IsoDate): IsoDate {
+  return addDays(weekStart(today), -7);
+}
+
 /** The `n` dates ending at (and including) `endDate`, oldest first. */
 export function lastNDates(n: number, endDate: IsoDate): readonly IsoDate[] {
   const dates: IsoDate[] = [];
@@ -447,6 +495,7 @@ const STORAGE_KEYS = {
   profile: 'profile',
   doses: 'doses',
   entries: 'entries',
+  weekly: 'weekly',
 } as const;
 
 async function readJson(key: string): Promise<unknown> {
@@ -522,6 +571,23 @@ export async function saveEntries(entries: Readonly<Record<IsoDate, DayEntry>>):
   await AsyncStorage.setItem(STORAGE_KEYS.entries, JSON.stringify(entries));
 }
 
+export async function loadWeekly(): Promise<Readonly<Record<IsoDate, WeeklyCheckin>>> {
+  const raw = await readJson(STORAGE_KEYS.weekly);
+  if (raw === null) return {};
+  const parsed = parseWeekly(raw);
+  return parsed.ok ? parsed.value : {};
+}
+
+export async function saveWeekly(weekly: Readonly<Record<IsoDate, WeeklyCheckin>>): Promise<void> {
+  await AsyncStorage.setItem(STORAGE_KEYS.weekly, JSON.stringify(weekly));
+}
+
+/** Insert or replace the entry for its own week; other weeks untouched. */
+export async function saveWeeklyCheckin(checkin: WeeklyCheckin): Promise<void> {
+  const weekly = await loadWeekly();
+  await saveWeekly({ ...weekly, [checkin.weekOf]: checkin });
+}
+
 export type CheckinInput =
   | { readonly session: 'morning'; readonly checkin: MorningCheckin }
   | { readonly session: 'evening'; readonly checkin: EveningCheckin };
@@ -569,5 +635,6 @@ export async function restoreBackup(backup: Backup): Promise<void> {
     backup.profile !== null ? saveProfile(backup.profile) : Promise.resolve(),
     saveDoseChanges(backup.doses),
     saveEntries(backup.entries),
+    saveWeekly(backup.weekly),
   ]);
 }

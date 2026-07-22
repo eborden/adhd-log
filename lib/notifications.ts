@@ -22,7 +22,11 @@ async function loadNotifications(): Promise<NotificationsModule | null> {
 const NOTIFICATION_IDS = {
   morning: 'adhd-log-morning-reminder',
   evening: 'adhd-log-evening-reminder',
+  weekly: 'adhd-log-weekly',
 } as const;
+
+// expo-notifications weekdays: 1 = Sunday, so Monday is 2.
+const MONDAY_WEEKDAY = 2;
 
 // Android (API 26+) drops any notification not tied to a channel — the fallback
 // "Miscellaneous" channel expo-notifications auto-creates is low-importance, so
@@ -84,6 +88,25 @@ async function scheduleDaily(
   });
 }
 
+async function scheduleWeekly(notifications: NotificationsModule, time: TimeOfDay): Promise<void> {
+  await notifications.cancelScheduledNotificationAsync(NOTIFICATION_IDS.weekly);
+  await notifications.scheduleNotificationAsync({
+    identifier: NOTIFICATION_IDS.weekly,
+    content: {
+      title: 'Weekly check-in',
+      body: 'How was last week overall?',
+      data: { kind: 'weekly' },
+    },
+    trigger: {
+      type: notifications.SchedulableTriggerInputTypes.WEEKLY,
+      weekday: MONDAY_WEEKDAY,
+      hour: time.hour,
+      minute: time.minute,
+      channelId: ANDROID_CHANNEL_ID,
+    },
+  });
+}
+
 export async function scheduleReminders(profile: Profile): Promise<void> {
   const notifications = await loadNotifications();
   if (notifications === null) return;
@@ -104,6 +127,11 @@ export async function scheduleReminders(profile: Profile): Promise<void> {
     'Evening check-in',
     'Take a minute to log today before you wind down.',
   );
+  if (profile.weeklyReminder !== undefined) {
+    await scheduleWeekly(notifications, profile.weeklyReminder);
+  } else {
+    await notifications.cancelScheduledNotificationAsync(NOTIFICATION_IDS.weekly);
+  }
 }
 
 /** Extracts which check-in session a tapped notification should deep-link to. */
@@ -113,13 +141,31 @@ export function sessionFromResponse(response: Notifications.NotificationResponse
   return isSession(session) ? session : null;
 }
 
+function isWeeklyNotificationKind(value: unknown): value is 'weekly' {
+  return value === 'weekly';
+}
+
+/** Whether a tapped notification is the weekly reminder, so the tap listener can route to it. */
+export function notificationKindFromResponse(
+  response: Notifications.NotificationResponse,
+): 'weekly' | null {
+  const data = response.notification.request.content.data;
+  const kind = data?.['kind'];
+  return isWeeklyNotificationKind(kind) ? 'weekly' : null;
+}
+
 export async function addNotificationTapListener(
-  onTap: (session: Session) => void,
+  onSessionTap: (session: Session) => void,
+  onWeeklyTap: () => void,
 ): Promise<EventSubscription | null> {
   const notifications = await loadNotifications();
   if (notifications === null) return null;
   return notifications.addNotificationResponseReceivedListener((response) => {
+    if (notificationKindFromResponse(response) === 'weekly') {
+      onWeeklyTap();
+      return;
+    }
     const session = sessionFromResponse(response);
-    if (session !== null) onTap(session);
+    if (session !== null) onSessionTap(session);
   });
 }

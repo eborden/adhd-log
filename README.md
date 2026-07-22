@@ -39,6 +39,15 @@ phone.
   </tr>
 </table>
 
+<table>
+  <tr>
+    <th width="50%">Weekly check-in</th>
+  </tr>
+  <tr>
+    <td><img src="./docs/screenshots/weekly.png" width="50%" alt="Weekly check-in screen"></td>
+  </tr>
+</table>
+
 ## What you track
 
 Two short check-ins a day. Nothing takes more than a minute.
@@ -61,6 +70,9 @@ You choose which evening ratings show up, so the check-in stays as short as you 
 
 ## Features
 
+- **Weekly check-in** — once a week, a quick "better / same / worse than last week" rating
+  (plus an optional note) so the trend shows up in your own words too, not just the daily
+  numbers.
 - **Trends** — 7, 14, or 30-day bar charts for each thing you track, with an optional
   rolling-average line to smooth out the day-to-day noise. A coverage caption tells you how
   many days you logged, and dose changes are marked right on the charts.

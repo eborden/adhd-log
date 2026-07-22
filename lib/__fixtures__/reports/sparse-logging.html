@@ -27,6 +27,10 @@
       .spark-line.spark-w1 > .spark { width: 1px; }
       /* Weekly headers go vertical past 5 weeks so a many-week table stays within the page width. */
       th.vhead { writing-mode: vertical-lr; white-space: nowrap; vertical-align: bottom; }
+      /* Neutral encoding for the weekly self-rating: no good/bad rating hue (it's the patient's
+         own word, not a judgment) — one accent color for all three impressions, distinguished
+         only by impressionGlyph's directional glyph. */
+      .impression-chip { background: #E8E1D3; color: #2A251E; border: 1px solid #2E6B4F; border-radius: 999px; padding: 2px 10px; font-size: 12px; }
       @media print {
         body { background: transparent; }
       }
@@ -39,6 +43,24 @@
       
       <table><tr><th>Metric</th><th>Trend</th></tr><tr><td>Sleep quality</td><td>▬ <span class="muted">(first half 3.7 → second half 3.7; 1 = Poor, 5 = Great)</span></td></tr><tr><td>How you feel waking up</td><td>▲ <span class="muted">(first half 3.3 → second half 3.7; 1 = Rough, 5 = Great)</span></td></tr><tr><td>Overall mood today</td><td>— <span class="muted">(not enough logged days to compare halves; 1 = Low, 5 = Great)</span></td></tr><tr><td>Focus / attention</td><td>— <span class="muted">(not enough logged days to compare halves; 1 = Scattered, 5 = Sharp)</span></td></tr><tr><td>Anxiety / irritability</td><td>— <span class="muted">(not enough logged days to compare halves; 1 = Calm, 5 = On edge)</span></td></tr><tr><td>Energy</td><td>— <span class="muted">(not enough logged days to compare halves; 1 = Drained, 5 = Energized)</span></td></tr></table>
       <h2>Dose changes</h2><ul><li>2026-01-05 — 2mg</li></ul>
+      <h2>Weekly impression timeline</h2>
+     <table>
+       <tr><th>Week of</th><th>Overall</th><th>Adherence</th><th>Dose change</th><th>Note</th></tr>
+       <tr>
+        <td>2026-01-05</td>
+        <td><span class="impression-chip">▬ About the same</span></td>
+        <td>2/2 doses</td>
+        <td>2mg</td>
+        <td>Hard to tell yet, haven't logged much.</td>
+      </tr><tr>
+        <td>2026-01-26</td>
+        <td><span class="impression-chip">▲ Better than the week before</span></td>
+        <td>2/2 doses</td>
+        <td></td>
+        <td>Felt a little sharper this week, I think.</td>
+      </tr>
+     </table>
+     <p class="muted">Self-rated, each week compared with the week before — not your starting point. Discuss trends with your provider.</p>
       <h2>Weekly averages</h2>
      <table>
        <tr><th>Metric</th><th>Trend</th><th>Week 1</th><th>Week 2</th><th>Week 3</th><th>Week 4</th></tr>

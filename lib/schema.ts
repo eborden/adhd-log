@@ -9,6 +9,7 @@ import {
   type SideEffectDetail,
   type SideEffectReports,
   type SideEffectSeverity,
+  type WeeklyImpression,
 } from './types';
 
 /**
@@ -113,6 +114,12 @@ export const SIDE_EFFECT_SEVERITY_LABELS: Readonly<Record<SideEffectSeverity, st
   mild: 'Mild',
   moderate: 'Moderate',
   severe: 'Severe',
+};
+
+export const WEEKLY_IMPRESSION_LABELS: Readonly<Record<WeeklyImpression, string>> = {
+  worse: 'Worse than the week before',
+  same: 'About the same',
+  better: 'Better than the week before',
 };
 
 export function isSideEffectSelected(reports: SideEffectReports, effect: SideEffect): boolean {
