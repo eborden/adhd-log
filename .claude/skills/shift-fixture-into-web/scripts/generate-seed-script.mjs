@@ -1,23 +1,16 @@
 // Reads a lib/__fixtures__/reports/*.backup.json fixture (shape: { exportedAt, profile, doses,
-// entries }) and prints a self-contained JS function that, when run *in the browser page*
-// (not in this Node process), shifts every date in the fixture by a constant number of days so
-// the most recent entry lands on "today" — computed from the browser's own `new Date()`, so it's
-// correct regardless of clock drift between this shell and the page — then seeds `localStorage`
-// with the shifted `profile`/`doses`/`entries` and returns a summary.
+// entries }) and prints a self-contained JS function that, when run *in the browser page* (not in
+// this Node process), shifts every date in the fixture so the most recent entry lands on
+// "today" — computed from the browser's own `new Date()`, so it's correct regardless of clock
+// drift between this shell and the page — then seeds `localStorage` with the shifted
+// `profile`/`doses`/`entries` and returns a summary.
 //
-// The shift is a pure translation, not a rescale: every date moves by the same number of days,
-// so the fixture's original cadence/spacing (e.g. "every 3rd day") is preserved exactly.
-//
-// Why the shift touches `profile.createdAt`: lib/export.ts's `coverage()`/`loggingStartDate()`
-// floors the Trends "logged X of Y days" denominator at `profile.createdAt`. Fixtures freeze
-// `createdAt` to their report-generation timestamp, which after a shift is no longer close to
-// the (now-shifted) earliest entry date. Left unshifted, Trends clips its window to almost
-// nothing and everything renders as a gap even though real data exists. This script always
-// re-derives `createdAt` from the shifted `startDate`, never leaves it stale.
-//
-// Why `lockEnabled` is forced to false: on web, expo-local-authentication's authenticateAsync()
-// isn't implemented (only its hardware/enrollment-check stubs are), so a fixture with
-// lockEnabled: true strands the tester on the app's lock screen with no way to unlock it.
+// The actual date-shift/re-derivation logic lives in ../../_shared/shift-fixture.mjs (shared with
+// shift-fixture-into-android's equivalent script) — see that file for why `createdAt` is
+// re-derived from the shifted `startDate` and why `lockEnabled` is forced off. This script only
+// adds the web-specific parts: embedding that shared function's source (via `.toString()`) so it
+// runs *inside the browser's JS realm* — required, because `todayIso` must come from the
+// browser's own clock, not this Node process's — and writing the result into `localStorage`.
 //
 // Usage:
 //   node .claude/skills/shift-fixture-into-web/scripts/generate-seed-script.mjs \
@@ -28,6 +21,7 @@
 // argument to the chrome-devtools MCP tool's evaluate_script.
 
 import { readFileSync } from 'node:fs';
+import { shiftFixture } from '../../_shared/shift-fixture.mjs';
 
 const fixturePath = process.argv[2];
 if (fixturePath === undefined) {
@@ -43,15 +37,8 @@ const fn = `() => {
   const doses = ${JSON.stringify(doses)};
   const entries = ${JSON.stringify(entries)};
 
-  function shiftDate(dateStr, days) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const dt = new Date(Date.UTC(y, m - 1, d));
-    dt.setUTCDate(dt.getUTCDate() + days);
-    const yy = dt.getUTCFullYear();
-    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(dt.getUTCDate()).padStart(2, '0');
-    return \`\${yy}-\${mm}-\${dd}\`;
-  }
+  const shiftFixture = ${shiftFixture.toString()};
+
   function todayLocal() {
     const d = new Date();
     const yy = d.getFullYear();
@@ -59,50 +46,21 @@ const fn = `() => {
     const dd = String(d.getDate()).padStart(2, '0');
     return \`\${yy}-\${mm}-\${dd}\`;
   }
-  function utcMs(dateStr) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    return Date.UTC(y, m - 1, d);
-  }
 
-  const entryDates = Object.keys(entries).sort();
-  const lastOriginalDate = entryDates[entryDates.length - 1];
-  const today = todayLocal();
-  const shiftDays = Math.round((utcMs(today) - utcMs(lastOriginalDate)) / 86400000);
+  const result = shiftFixture(profile, doses, entries, todayLocal());
 
-  const newProfile = {
-    ...profile,
-    startDate: shiftDate(profile.startDate, shiftDays),
-    createdAt: shiftDate(profile.startDate, shiftDays) + 'T00:00:00.000Z',
-    // Forced off: on web, expo-local-authentication's authenticateAsync() isn't implemented
-    // (its web shim only stubs the hardware/enrollment checks), so LockScreen's unlock attempt
-    // always throws and there is no way to get past it. A fixture with lockEnabled: true would
-    // otherwise strand the tester on the lock screen with no bypass.
-    lockEnabled: false,
-  };
-
-  const newDoses = doses.map((change) => ({ ...change, date: shiftDate(change.date, shiftDays) }));
-
-  const newEntries = {};
-  for (const [date, entry] of Object.entries(entries)) {
-    const newDate = shiftDate(date, shiftDays);
-    const newEntry = { ...entry, date: newDate };
-    if (newEntry.morning) newEntry.morning = { ...newEntry.morning, completedAt: newDate + 'T08:05:00.000Z' };
-    if (newEntry.evening) newEntry.evening = { ...newEntry.evening, completedAt: newDate + 'T20:35:00.000Z' };
-    newEntries[newDate] = newEntry;
-  }
-
-  localStorage.setItem('profile', JSON.stringify(newProfile));
-  localStorage.setItem('doses', JSON.stringify(newDoses));
-  localStorage.setItem('entries', JSON.stringify(newEntries));
+  localStorage.setItem('profile', JSON.stringify(result.profile));
+  localStorage.setItem('doses', JSON.stringify(result.doses));
+  localStorage.setItem('entries', JSON.stringify(result.entries));
 
   return {
-    shiftDays,
-    today,
-    firstEntryDate: Object.keys(newEntries).sort()[0],
-    lastEntryDate: Object.keys(newEntries).sort().slice(-1)[0],
-    doseDates: newDoses.map((c) => c.date),
-    startDate: newProfile.startDate,
-    createdAt: newProfile.createdAt,
+    shiftDays: result.shiftDays,
+    today: result.today,
+    firstEntryDate: result.firstEntryDate,
+    lastEntryDate: result.lastEntryDate,
+    doseDates: result.doseDates,
+    startDate: result.startDate,
+    createdAt: result.createdAt,
   };
 }`;
 
