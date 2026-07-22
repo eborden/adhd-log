@@ -21,9 +21,9 @@ phone.
 | ------------------------------------------- | -------------------------------------------------------- |
 | ![Today screen](docs/screenshots/today.png) | ![Morning check-in screen](docs/screenshots/checkin.png) |
 
-| Trends                                        | Provider report                                     |
-| --------------------------------------------- | --------------------------------------------------- |
-| ![Trends screen](docs/screenshots/trends.png) | ![Provider PDF report](docs/screenshots/report.png) |
+| Trends                                        | Provider report (click to see the [full report](docs/screenshots/report.png))              |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| ![Trends screen](docs/screenshots/trends.png) | [![Provider PDF report](docs/screenshots/report-preview.png)](docs/screenshots/report.png) |
 
 ## What you track
 
