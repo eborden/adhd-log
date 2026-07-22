@@ -29,25 +29,74 @@ same numbers across every screenshot).
 
 ## Workflow: live app screens
 
-1. Confirm an Android emulator is running with the app installed: `adb devices` should list it.
-   If none is running, start one (e.g. `emulator -avd Pixel_7_API_34 -no-window -no-audio
--no-boot-anim -gpu swiftshader_indirect &`, adjusting the AVD name to what's available —
-   `emulator -list-avds`). The committed screenshots were all taken at a Pixel 7 API 34's native
-   resolution (1080×2400), which is also why that's the AVD to prefer for a consistent grid.
-2. **Seed golden data by invoking the `shift-fixture-into-android` skill** — don't reinvent
+1. Confirm an Android emulator is running: `adb devices` should list it. If none is running,
+   start one (e.g. `emulator -avd Pixel_7_API_34 -no-window -no-audio -no-boot-anim -gpu
+swiftshader_indirect &`, adjusting the AVD name to what's available — `emulator -list-avds`).
+   The committed screenshots were all taken at a Pixel 7 API 34's native resolution (1080×2400),
+   which is also why that's the AVD to prefer for a consistent grid.
+
+2. **Get a debug build installed — not the CI release APK.** If the ask is "screenshot the
+   latest build," the instinct is to reach for `npm run apk:ci` (see `docs/CI.md`), which
+   downloads and installs the latest **release** APK from GitHub Actions. That's fine for
+   confirming the build installs, but step 3 below (fixture seeding) needs `run-as`, which
+   **always** fails against it: `run-as: package not debuggable`. Release builds are never
+   debuggable regardless of keystore — there's no flag to flip. Confirmed hitting this wall
+   directly: `npm run apk:ci` installed clean, then `shift-fixture-into-android`'s `run-as` step
+   failed outright.
+
+   Instead: `adb uninstall com.adhdlog.app` (needed anyway — a release APK and a debug APK are
+   signed with different keystores, so installing one over the other fails with
+   `INSTALL_FAILED_UPDATE_INCOMPATIBLE`), then `npm run android` (`expo run:android`) to build
+   and install a local **debug** build of the same source. This is visually identical to what CI
+   would produce — release vs. debug only changes signing and native optimization, not what
+   renders — so it satisfies "screenshot the latest build" while staying seedable.
+
+   **If you're in a git worktree**, it does not inherit `node_modules` from the main checkout —
+   run `npm ci` there first. Skipping this doesn't fail the native/Gradle build (that resolves
+   packages by walking up to a parent checkout's `node_modules`), so `expo run:android` reports
+   `BUILD SUCCESSFUL` and installs fine, but Metro serves the JS bundle from the worktree's own
+   project root and throws `UnableToResolveError: ... ./node_modules/expo-router/entry` at
+   runtime — the app shows a red error screen instead of loading. `npm ci` in the worktree, then
+   force-stop and relaunch the app, fixes it.
+
+3. **Seed golden data by invoking the `shift-fixture-into-android` skill** — don't reinvent
    this. It reads the emulator's own clock, generates SQL from a
    `lib/__fixtures__/reports/*.backup.json` fixture, and writes it straight into the installed
    app's AsyncStorage-backed SQLite database via `adb ... run-as ... sqlite3`, then force-stops
    and restarts the app. Read that skill for the full mechanics and its gotchas (needing Metro +
    `adb reverse tcp:8081 tcp:8081` for the restart on a debug build, `run-as` requiring a
-   debuggable install).
-3. Before capturing anything, take one screenshot and check for dev-mode overlays (e.g. an
+   debuggable install — see step 2 above if that's news).
+
+   If a plain `adb shell am start -n com.adhdlog.app/.MainActivity` restart leaves the app on a
+   black screen (dev client launched but never loaded a bundle), relaunch through the
+   dev-client deep link instead — this reconnects it to Metro directly:
+
+   ```bash
+   adb -s <serial> shell am start -a android.intent.action.VIEW \
+     -d "adhdlog://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081"
+   ```
+
+4. Before capturing anything, take one screenshot and check for dev-mode overlays (e.g. an
    "Open debugger to view warnings" LogBox toast). Dismiss them first — an overlay sitting over
    the bottom tab bar intercepts taps on later navigation, not just spoils the image. This bit a
    prior capture session directly: the toast overlapped the tab bar and ate the first couple of
    navigation taps before it was dismissed.
-4. Navigate with `adb -s <serial> shell input tap <x> <y>` (coordinates in device pixels, read
-   off the most recent screenshot — not any scaled-down preview of it) and capture with:
+5. Navigate with `adb -s <serial> shell input tap <x> <y>` (coordinates in device pixels). For
+   large, obvious targets, reading coordinates off the most recent screenshot (not any
+   scaled-down preview of it) is fine. For small or closely-spaced targets — the bottom tab bar
+   is the repeat offender — visually estimating from a screenshot is not reliable enough and
+   wastes several capture-verify round trips on taps that silently miss. Get exact bounds
+   instead:
+   ```bash
+   adb -s <serial> shell uiautomator dump /sdcard/window_dump.xml
+   adb -s <serial> pull /sdcard/window_dump.xml /tmp/window_dump.xml
+   grep -oE 'text="Trends"[^>]*bounds="\[[0-9,]+\]\[[0-9,]+\]"' /tmp/window_dump.xml
+   ```
+   then tap the center of the reported `bounds="[x1,y1][x2,y2]"`. Note the clickable element's
+   bounds can extend well beyond the visible icon+label (e.g. the tab bar's tappable area reaches
+   almost to the bottom of the screen) — don't assume the tap target is centered on what you can
+   see.
+6. Capture with:
    ```bash
    adb -s <serial> exec-out screencap -p > docs/screenshots/<name>.png
    ```
@@ -111,3 +160,11 @@ a GitHub-rendered markdown file. Instead:
   History non-empty, Trends showing solid bars with a real `logged X of Y days` count (not `0 of
 1`), Settings showing the fixture's medication/dose. See `shift-fixture-into-android`'s own
   verification step for the full checklist.
+- Switching between a CI release install and a local debug install (either direction) fails with
+  `INSTALL_FAILED_UPDATE_INCOMPATIBLE: ... signatures do not match`, not a debuggability error —
+  the two are signed with different keystores. `adb uninstall com.adhdlog.app` before installing
+  the other one; this also wipes app storage, so re-seed after.
+- A Trends chart can render with visibly correct bars but a stale header line (e.g. still saying
+  `logged 14 of 14 days` right after switching the 7d/14d/30d range) for a moment — re-screenshot
+  after a beat rather than trusting the first capture after a tap that changes derived text, not
+  just visual state.
