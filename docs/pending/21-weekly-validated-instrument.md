@@ -12,7 +12,8 @@
 
 ## Problem / Context
 
-[Doc 13](13-weekly-global-impression.md) fills a real gap — nothing captures a patient's
+Doc 13 (now landed — see [`DECISIONS.md`](../DECISIONS.md#weekly-global-impression-check-in-2026-07-22))
+fills a real gap — nothing captures a patient's
 _week-over-week_ sense of change, the axis a provider titrates against — with a coarse 3-way
 Patient Global Impression of Change (better / same / worse). That is cheap and honest, but from a
 **clinical-measurement** standpoint it has three weaknesses:

@@ -95,6 +95,8 @@ export interface Profile {
   readonly eveningReminder: TimeOfDay;
   readonly lockEnabled: boolean;
   readonly enabledEveningMetrics?: readonly EveningRatingKey[];
+  /** Absent = weekly reminder off (default). Present = fires Monday morning at this time. */
+  readonly weeklyReminder?: TimeOfDay;
   readonly createdAt: IsoTimestamp;
 }
 
@@ -126,6 +128,22 @@ export interface DayEntry {
 
 /** Every Rating-valued field across both check-in sessions. */
 export type RatingKey = MorningRatingKey | EveningRatingKey;
+
+/** Patient Global Impression of Change, coarse 3-way. Order is worse→better for rendering. */
+export const WEEKLY_IMPRESSIONS = ['worse', 'same', 'better'] as const;
+export type WeeklyImpression = (typeof WEEKLY_IMPRESSIONS)[number];
+
+/**
+ * A once-per-week self-rating of overall change vs. the immediately preceding week.
+ * `weekOf` is the Monday (ISO week-start) of the week being rated and is the map key in
+ * storage — one entry per week. The rated week is always fully elapsed at capture time.
+ */
+export interface WeeklyCheckin {
+  readonly weekOf: IsoDate;
+  readonly overall: WeeklyImpression;
+  readonly note?: string;
+  readonly completedAt: IsoTimestamp;
+}
 
 export type ScaleDirection = 'higher-better' | 'lower-better' | 'neutral';
 

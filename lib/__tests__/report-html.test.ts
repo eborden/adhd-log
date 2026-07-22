@@ -4,6 +4,9 @@ import {
   dailyLogCell,
   dailyLogColumns,
   dailyLogHasValue,
+  doseChangeInWeek,
+  impressionGlyph,
+  weeklyAdherence,
   type ReportOptions,
 } from '../report-html';
 import { addDays, isoTimestampNow } from '../storage';
@@ -16,6 +19,7 @@ import type {
   Metric,
   Profile,
   Rating,
+  WeeklyCheckin,
 } from '../types';
 
 const DAY_1 = '2026-07-01' as IsoDate;
@@ -68,8 +72,21 @@ function htmlFromRows(
   const start = rows[0]?.date ?? DAY_1;
   const end = rows[rows.length - 1]?.date ?? start;
   return options === undefined
-    ? buildReportHtml(profile, doses, entries, start, end)
-    : buildReportHtml(profile, doses, entries, start, end, options);
+    ? buildReportHtml(profile, doses, entries, {}, start, end)
+    : buildReportHtml(profile, doses, entries, {}, start, end, options);
+}
+
+/** Renders with an explicit `weekly` map, for the weekly-timeline section's own tests. */
+function htmlWithWeekly(
+  weekly: Readonly<Record<IsoDate, WeeklyCheckin>>,
+  doses: readonly DoseChange[],
+  rows: readonly DayEntry[],
+): string {
+  const entries: Record<IsoDate, DayEntry> = {};
+  for (const row of rows) entries[row.date] = row;
+  const start = rows[0]?.date ?? DAY_1;
+  const end = rows[rows.length - 1]?.date ?? start;
+  return buildReportHtml(null, doses, entries, weekly, start, end);
 }
 
 const DOSE_TAKEN_METRIC: Metric = { kind: 'toggle', key: 'doseTaken', label: "Took today's dose" };
@@ -627,5 +644,104 @@ describe('buildReportHtml', () => {
     });
     expect(html).not.toContain('<h2>Notes</h2>');
     expect(html).not.toContain('private note');
+  });
+});
+
+const MONDAY = '2026-07-06' as IsoDate; // a Monday
+
+describe('weeklyAdherence', () => {
+  it('counts taken/logged over the 7 in-week dates, ignoring days with no morning check-in', () => {
+    const entries: Record<IsoDate, DayEntry> = {
+      [MONDAY]: morningRow(MONDAY, 3), // doseTaken: true
+      [addDays(MONDAY, 3)]: {
+        date: addDays(MONDAY, 3),
+        morning: { ratings: {}, doseTaken: false, completedAt: isoTimestampNow() },
+      },
+      [addDays(MONDAY, 5)]: { date: addDays(MONDAY, 5) }, // no morning check-in
+    };
+    expect(weeklyAdherence(entries, MONDAY)).toEqual({ taken: 1, logged: 2 });
+  });
+
+  it('is {taken:0, logged:0} for a week with nothing logged', () => {
+    expect(weeklyAdherence({}, MONDAY)).toEqual({ taken: 0, logged: 0 });
+  });
+
+  it('is taken:0 when doses were logged but never taken', () => {
+    const entries: Record<IsoDate, DayEntry> = {
+      [MONDAY]: {
+        date: MONDAY,
+        morning: { ratings: {}, doseTaken: false, completedAt: isoTimestampNow() },
+      },
+    };
+    expect(weeklyAdherence(entries, MONDAY)).toEqual({ taken: 0, logged: 1 });
+  });
+});
+
+describe('doseChangeInWeek', () => {
+  const dose = { amount: 40, unit: 'mg' as const };
+
+  it("returns a change on the week's Monday (inclusive)", () => {
+    const doses: readonly DoseChange[] = [{ date: MONDAY, dose }];
+    expect(doseChangeInWeek(doses, MONDAY)).toEqual(doses[0]);
+  });
+
+  it("returns a change on the week's Sunday (inclusive)", () => {
+    const sunday = addDays(MONDAY, 6);
+    const doses: readonly DoseChange[] = [{ date: sunday, dose }];
+    expect(doseChangeInWeek(doses, MONDAY)).toEqual(doses[0]);
+  });
+
+  it('returns undefined for a change one day outside either edge', () => {
+    const dayBefore: readonly DoseChange[] = [{ date: addDays(MONDAY, -1), dose }];
+    const dayAfter: readonly DoseChange[] = [{ date: addDays(MONDAY, 7), dose }];
+    expect(doseChangeInWeek(dayBefore, MONDAY)).toBeUndefined();
+    expect(doseChangeInWeek(dayAfter, MONDAY)).toBeUndefined();
+  });
+});
+
+describe('impressionGlyph', () => {
+  it('returns the exhaustive glyph for each impression', () => {
+    expect(impressionGlyph('worse')).toBe('▼');
+    expect(impressionGlyph('same')).toBe('▬');
+    expect(impressionGlyph('better')).toBe('▲');
+  });
+});
+
+describe('weekly impression timeline section', () => {
+  const checkin: WeeklyCheckin = {
+    weekOf: MONDAY,
+    overall: 'better',
+    note: '<script>alert(1)</script>',
+    completedAt: isoTimestampNow(),
+  };
+
+  it('emits the label, the week date, the adherence figure, and an escaped note', () => {
+    const rows: readonly DayEntry[] = [morningRow(MONDAY, 3), morningRow(addDays(MONDAY, 1), 3)];
+    const html = htmlWithWeekly({ [MONDAY]: checkin }, [], rows);
+    expect(html).toContain('<h2>Weekly impression timeline</h2>');
+    expect(html).toContain('Better than the week before');
+    expect(html).toContain(MONDAY);
+    expect(html).toContain('2/2 doses');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).not.toContain('<script>alert(1)</script>');
+  });
+
+  it('shows the in-week dose change value', () => {
+    const doses: readonly DoseChange[] = [
+      { date: addDays(MONDAY, 2), dose: { amount: 60, unit: 'mg' } },
+    ];
+    const html = htmlWithWeekly({ [MONDAY]: checkin }, doses, [morningRow(MONDAY, 3)]);
+    expect(html).toContain('60mg');
+  });
+
+  it('shows "—" adherence when nothing was logged that week', () => {
+    const html = htmlWithWeekly({ [MONDAY]: checkin }, [], []);
+    expect(html).toContain('<h2>Weekly impression timeline</h2>');
+    expect(html).toContain('<td>—</td>');
+  });
+
+  it('omits the section entirely when weekly is empty', () => {
+    const html = htmlWithWeekly({}, [], [morningRow(MONDAY, 3)]);
+    expect(html).not.toContain('Weekly impression timeline');
   });
 });

@@ -22,6 +22,7 @@ function renderScenario(scenario: (typeof SCENARIOS)[number]): string {
     scenario.profile,
     scenario.doses,
     scenario.entries,
+    scenario.weekly,
     scenario.rangeStart,
     scenario.rangeEnd,
     scenario.options ?? DEFAULT_REPORT_OPTIONS,

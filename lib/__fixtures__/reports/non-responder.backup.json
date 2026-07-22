@@ -469,5 +469,24 @@
         "completedAt": "2026-07-19T12:00:00.000Z"
       }
     }
+  },
+  "weekly": {
+    "2026-02-02": {
+      "weekOf": "2026-02-02",
+      "overall": "same",
+      "completedAt": "2026-07-19T12:00:00.000Z",
+      "note": "No real change I can point to."
+    },
+    "2026-02-09": {
+      "weekOf": "2026-02-09",
+      "overall": "same",
+      "completedAt": "2026-07-19T12:00:00.000Z"
+    },
+    "2026-02-16": {
+      "weekOf": "2026-02-16",
+      "overall": "same",
+      "completedAt": "2026-07-19T12:00:00.000Z",
+      "note": "Still about the same as when I started."
+    }
   }
 }

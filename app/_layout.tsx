@@ -45,9 +45,14 @@ export default function RootLayout() {
     let subscription: EventSubscription | null = null;
 
     configureNotificationHandler().catch(() => undefined);
-    addNotificationTapListener((session) => {
-      router.push({ pathname: '/checkin', params: { session } });
-    })
+    addNotificationTapListener(
+      (session) => {
+        router.push({ pathname: '/checkin', params: { session } });
+      },
+      () => {
+        router.push('/weekly');
+      },
+    )
       .then((sub) => {
         if (cancelled) {
           sub?.remove();
@@ -94,6 +99,7 @@ export default function RootLayout() {
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="checkin" options={{ presentation: 'modal', title: 'Check-in' }} />
+        <Stack.Screen name="weekly" options={{ presentation: 'modal', title: 'Weekly check-in' }} />
         <Stack.Screen name="entry/[date]" options={{ title: 'Entry' }} />
       </Stack>
     </SafeAreaProvider>

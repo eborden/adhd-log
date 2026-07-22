@@ -70,7 +70,7 @@ strictness flag above still applies in full to our own source.
 ## Layout
 
 - `app/` — expo-router routes (tabs: Today / Trends / History / Settings; plus `checkin`,
-  `entry/[date]`, onboarding).
+  `weekly`, `entry/[date]`, onboarding).
 - `components/` — thin, presentational (ScaleSelector, Chips, Toggle, Stepper, LockScreen).
 - `hooks/` — React/expo-router hooks shared across routes (`useFocusLoad`). Not RN-free, so
   these live here rather than in `lib/` and are not unit-tested under the node Vitest setup.

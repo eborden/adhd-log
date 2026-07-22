@@ -30,6 +30,8 @@ import type {
   Profile,
   Rating,
   SideEffectReports,
+  WeeklyCheckin,
+  WeeklyImpression,
 } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -122,6 +124,36 @@ function dose(amount: number, unit: Dose['unit'] = 'mg'): Dose {
   return { amount, unit };
 }
 
+/** Monday-start ISO week containing `date` — a local mirror of `storage.ts#weekStart`, kept
+ * here rather than imported so this module stays free of any runtime dependency. */
+function mondayOf(date: IsoDate): IsoDate {
+  const dow = new Date(`${date}T00:00:00.000Z`).getUTCDay(); // 0=Sun..6=Sat
+  const delta = dow === 0 ? -6 : 1 - dow;
+  return addDays(date, delta);
+}
+
+/** One weekly self-rating, addressed by its offset (in days) from the scenario start — the
+ * checkin files under whichever Monday-start week contains that offset. */
+interface WeeklySpec {
+  readonly offset: number;
+  readonly overall: WeeklyImpression;
+  readonly note?: string;
+}
+
+function buildWeekly(start: IsoDate, specs: readonly WeeklySpec[]): Record<IsoDate, WeeklyCheckin> {
+  const weekly: Record<IsoDate, WeeklyCheckin> = {};
+  for (const spec of specs) {
+    const weekOf = mondayOf(addDays(start, spec.offset));
+    weekly[weekOf] = {
+      weekOf,
+      overall: spec.overall,
+      completedAt: FIXED_TS,
+      ...(spec.note !== undefined ? { note: spec.note } : {}),
+    };
+  }
+  return weekly;
+}
+
 // ---------------------------------------------------------------------------
 // Scenario shape.
 // ---------------------------------------------------------------------------
@@ -136,6 +168,7 @@ export interface ReportScenario {
   readonly profile: Profile | null;
   readonly doses: readonly DoseChange[];
   readonly entries: Readonly<Record<IsoDate, DayEntry>>;
+  readonly weekly: Readonly<Record<IsoDate, WeeklyCheckin>>;
   readonly rangeStart: IsoDate;
   readonly rangeEnd: IsoDate;
   /** Omitted → the report's `DEFAULT_REPORT_OPTIONS`. */
@@ -149,6 +182,7 @@ export function scenarioBackup(scenario: ReportScenario): Backup {
     profile: scenario.profile,
     doses: scenario.doses,
     entries: scenario.entries,
+    weekly: scenario.weekly,
   };
 }
 
@@ -180,6 +214,15 @@ const cleanResponder: ReportScenario = {
   ],
   rangeStart: CLEAN_START,
   rangeEnd: addDays(CLEAN_START, 20),
+  weekly: buildWeekly(CLEAN_START, [
+    { offset: 0, overall: 'worse', note: 'Still nauseous most days, mood flat.' },
+    { offset: 7, overall: 'same', note: 'About the same, maybe slightly better focus.' },
+    {
+      offset: 14,
+      overall: 'better',
+      note: 'Noticeably better — nausea gone, mood more even.',
+    },
+  ]),
   entries: build(CLEAN_START, [
     // Week 1 — baseline, early nausea, little effect yet.
     {
@@ -334,6 +377,22 @@ const titrationJourney: ReportScenario = {
   ],
   rangeStart: TITR_START,
   rangeEnd: addDays(TITR_START, 41),
+  weekly: buildWeekly(TITR_START, [
+    { offset: 0, overall: 'worse', note: 'New medication — feeling sedated and dizzy.' },
+    { offset: 7, overall: 'same', note: 'Anxiety improving, energy still low.' },
+    { offset: 14, overall: 'worse', note: 'Bumped to 2mg — dizzy again for a few days.' },
+    {
+      offset: 21,
+      overall: 'better',
+      note: 'Leveled out — mood and focus clearly better than last week.',
+    },
+    { offset: 28, overall: 'same', note: 'Adjusting to 3mg, roughly steady.' },
+    {
+      offset: 35,
+      overall: 'better',
+      note: 'Best week yet — sharp focus, calm, sleeping great.',
+    },
+  ]),
   entries: build(TITR_START, [
     // Period 1 (1mg): sedation hits, energy dips, some calming.
     {
@@ -483,6 +542,24 @@ const sideEffectHeavy: ReportScenario = {
   ],
   rangeStart: SE_START,
   rangeEnd: addDays(SE_START, 23),
+  weekly: buildWeekly(SE_START, [
+    { offset: 0, overall: 'worse', note: 'Severe nausea this week, hard to keep food down.' },
+    {
+      offset: 7,
+      overall: 'same',
+      note: 'Nausea easing a bit but sleep is rough — up to 400mg now.',
+    },
+    {
+      offset: 14,
+      overall: 'same',
+      note: 'Insomnia still bad most nights, though focus is a little sharper.',
+    },
+    {
+      offset: 21,
+      overall: 'better',
+      note: "Sleep's still spotty but nausea's mostly gone and focus is noticeably better.",
+    },
+  ]),
   entries: build(SE_START, [
     {
       offset: 0,
@@ -716,6 +793,11 @@ const nonResponder: ReportScenario = {
   doses: [{ date: NR_START, dose: dose(80) }],
   rangeStart: NR_START,
   rangeEnd: addDays(NR_START, 20),
+  weekly: buildWeekly(NR_START, [
+    { offset: 0, overall: 'same', note: 'No real change I can point to.' },
+    { offset: 7, overall: 'same' },
+    { offset: 14, overall: 'same', note: 'Still about the same as when I started.' },
+  ]),
   entries: build(NR_START, [
     {
       offset: 0,
@@ -847,6 +929,16 @@ const poorAdherence: ReportScenario = {
   doses: [{ date: PA_START, dose: dose(40) }],
   rangeStart: PA_START,
   rangeEnd: addDays(PA_START, 27),
+  weekly: buildWeekly(PA_START, [
+    { offset: 0, overall: 'worse', note: 'Forgot my dose a few times, feeling foggy.' },
+    {
+      offset: 7,
+      overall: 'same',
+      note: 'Better on the days I remembered, but still missing some.',
+    },
+    { offset: 14, overall: 'worse', note: 'Rough week, missed several doses.' },
+    { offset: 21, overall: 'same', note: 'About the same — adherence still inconsistent.' },
+  ]),
   entries: build(PA_START, [
     {
       offset: 0,
@@ -958,6 +1050,10 @@ const sparseLogging: ReportScenario = {
   doses: [{ date: SP_START, dose: dose(2) }],
   rangeStart: SP_START,
   rangeEnd: addDays(SP_START, 27),
+  weekly: buildWeekly(SP_START, [
+    { offset: 0, overall: 'same', note: "Hard to tell yet, haven't logged much." },
+    { offset: 21, overall: 'better', note: 'Felt a little sharper this week, I think.' },
+  ]),
   entries: build(SP_START, [
     {
       offset: 0,
@@ -1010,6 +1106,9 @@ const shortWeek: ReportScenario = {
   doses: [{ date: iso('2026-06-01'), dose: dose(3) }],
   rangeStart: SW_START,
   rangeEnd: addDays(SW_START, 6),
+  weekly: buildWeekly(SW_START, [
+    { offset: 0, overall: 'better', note: 'Good week — stayed on task most days.' },
+  ]),
   entries: build(SW_START, [
     {
       offset: 0,
@@ -1093,6 +1192,21 @@ const longMultimonth: ReportScenario = {
   ],
   rangeStart: LM_START,
   rangeEnd: addDays(LM_START, 59),
+  weekly: buildWeekly(LM_START, [
+    {
+      offset: 0,
+      overall: 'worse',
+      note: 'Early days, not much effect yet, if anything more scattered.',
+    },
+    { offset: 14, overall: 'same', note: 'Slight improvement some days, hard to tell.' },
+    { offset: 28, overall: 'same', note: 'Still slow going right around the dose increase.' },
+    {
+      offset: 42,
+      overall: 'better',
+      note: 'Clear improvement since the increase — sharper and calmer.',
+    },
+    { offset: 56, overall: 'better', note: 'Best stretch yet, consistently good days.' },
+  ]),
   entries: build(LM_START, [
     // Period 1 (40mg, days 0–29): slow, partial.
     lmDay(0, 2, 2, 3, 4),
@@ -1141,6 +1255,20 @@ const plateau: ReportScenario = {
   doses: [{ date: PL_START, dose: dose(400) }],
   rangeStart: PL_START,
   rangeEnd: addDays(PL_START, 27),
+  weekly: buildWeekly(PL_START, [
+    { offset: 0, overall: 'worse', note: 'Rough start, mood low and anxious most days.' },
+    {
+      offset: 7,
+      overall: 'better',
+      note: 'Clearly better than last week — mood and energy up.',
+    },
+    {
+      offset: 14,
+      overall: 'same',
+      note: 'Similar to last week — leveled out at a good place.',
+    },
+    { offset: 21, overall: 'same', note: 'About the same as last week, holding steady.' },
+  ]),
   entries: build(PL_START, [
     // Weeks 1–2: rising.
     {
@@ -1314,6 +1442,30 @@ const mixedSignals: ReportScenario = {
   options: { beforeAfterWindowDays: 7, includeNotes: false },
   rangeStart: MS_START,
   rangeEnd: addDays(MS_START, 27),
+  // The weekly note rides here on purpose even though `includeNotes: false` suppresses the
+  // *daily* notes section — the two are deliberately independent (see report-html.ts).
+  weekly: buildWeekly(MS_START, [
+    {
+      offset: 0,
+      overall: 'better',
+      note: 'Focus is noticeably sharper, though I feel wired.',
+    },
+    {
+      offset: 7,
+      overall: 'worse',
+      note: 'Anxious and barely eating — this dose feels like too much.',
+    },
+    {
+      offset: 14,
+      overall: 'same',
+      note: 'Dose got reduced today — hoping this settles things down.',
+    },
+    {
+      offset: 21,
+      overall: 'better',
+      note: "Clearly calmer and appetite's back to normal on the lower dose.",
+    },
+  ]),
   entries: build(MS_START, [
     // On 80mg — focus up, anxiety up, appetite down.
     {

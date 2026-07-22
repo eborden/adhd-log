@@ -25,18 +25,27 @@ import {
   loadDoseChanges,
   loadEntries,
   loadProfile,
+  loadWeekly,
   loggedDateRange,
   restoreBackup,
   saveProfile,
   todayIsoDate,
 } from '../../lib/storage';
 import { radius, space, typography, useTheme } from '../../lib/theme';
-import type { DayEntry, DoseChange, DoseUnit, IsoDate, Profile } from '../../lib/types';
+import type {
+  DayEntry,
+  DoseChange,
+  DoseUnit,
+  IsoDate,
+  Profile,
+  WeeklyCheckin,
+} from '../../lib/types';
 
 interface SettingsData {
   readonly profile: Profile | null;
   readonly doses: readonly DoseChange[];
   readonly entries: Readonly<Record<IsoDate, DayEntry>>;
+  readonly weekly: Readonly<Record<IsoDate, WeeklyCheckin>>;
 }
 
 function SectionLabel({ children }: { readonly children: string }) {
@@ -52,16 +61,22 @@ export default function Settings() {
   const theme = useTheme();
   const { data, setData, refresh } = useFocusLoad<SettingsData>(
     async () => {
-      const [loadedProfile, loadedDoses, loadedEntries] = await Promise.all([
+      const [loadedProfile, loadedDoses, loadedEntries, loadedWeekly] = await Promise.all([
         loadProfile(),
         loadDoseChanges(),
         loadEntries(),
+        loadWeekly(),
       ]);
-      return { profile: loadedProfile, doses: loadedDoses, entries: loadedEntries };
+      return {
+        profile: loadedProfile,
+        doses: loadedDoses,
+        entries: loadedEntries,
+        weekly: loadedWeekly,
+      };
     },
-    { profile: null, doses: [], entries: {} },
+    { profile: null, doses: [], entries: {}, weekly: {} },
   );
-  const { profile, doses, entries } = data;
+  const { profile, doses, entries, weekly } = data;
   const [newAmount, setNewAmount] = useState('');
   const [newUnit, setNewUnit] = useState<DoseUnit>('mg');
   const [newNote, setNewNote] = useState('');
@@ -115,6 +130,30 @@ export default function Settings() {
       .catch(() => undefined);
   };
 
+  // Minute fixed at 30, distinct from the daily reminders' fixed :00 minute, so the weekly
+  // trigger can never collide with either daily one even if the hours match.
+  const applyWeeklyReminder = (next: Profile): void => {
+    updateProfile(next);
+    requestNotificationPermissions()
+      .then((granted) => (granted ? scheduleReminders(next) : Promise.resolve()))
+      .catch(() => undefined);
+  };
+
+  const handleWeeklyReminderToggle = (enabled: boolean): void => {
+    const { weeklyReminder, ...withoutWeeklyReminder } = currentProfile;
+    void weeklyReminder;
+    applyWeeklyReminder(
+      enabled
+        ? { ...withoutWeeklyReminder, weeklyReminder: { hour: 9, minute: 30 } }
+        : withoutWeeklyReminder,
+    );
+  };
+
+  const handleWeeklyReminderHourChange = (hour: number): void => {
+    if (!isHour(hour)) return;
+    applyWeeklyReminder({ ...currentProfile, weeklyReminder: { hour, minute: 30 } });
+  };
+
   const handleExportPdf = async (): Promise<void> => {
     setBusy(true);
     try {
@@ -124,7 +163,7 @@ export default function Settings() {
       const span = loggedDateRange(entries);
       const rangeStart = span?.start ?? today;
       const rangeEnd = span?.end ?? today;
-      const html = buildReportHtml(currentProfile, doses, entries, rangeStart, rangeEnd, {
+      const html = buildReportHtml(currentProfile, doses, entries, weekly, rangeStart, rangeEnd, {
         ...DEFAULT_REPORT_OPTIONS,
         includeNotes,
       });
@@ -139,8 +178,12 @@ export default function Settings() {
   const handleExportJson = async (): Promise<void> => {
     setBusy(true);
     try {
-      const [entries, currentDoses] = await Promise.all([loadEntries(), loadDoseChanges()]);
-      const backup = buildBackup(currentProfile, currentDoses, entries);
+      const [entries, currentDoses, currentWeekly] = await Promise.all([
+        loadEntries(),
+        loadDoseChanges(),
+        loadWeekly(),
+      ]);
+      const backup = buildBackup(currentProfile, currentDoses, entries, currentWeekly);
       await exportJsonBackup(backup);
     } catch {
       Alert.alert('Could not export the JSON backup.');
@@ -253,6 +296,21 @@ export default function Settings() {
             handleReminderChange('evening', hour);
           }}
         />
+        <Toggle
+          label="Weekly check-in reminder (Monday)"
+          value={currentProfile.weeklyReminder !== undefined}
+          onChange={handleWeeklyReminderToggle}
+        />
+        {currentProfile.weeklyReminder !== undefined ? (
+          <Stepper
+            label="Weekly (hour, 24h)"
+            value={currentProfile.weeklyReminder.hour}
+            min={0}
+            max={23}
+            step={1}
+            onChange={handleWeeklyReminderHourChange}
+          />
+        ) : null}
       </Card>
 
       <SectionLabel>Evening check-in</SectionLabel>

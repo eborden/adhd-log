@@ -3,16 +3,36 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Card } from '../../components/Card';
 import { useFocusLoad } from '../../hooks/useFocusLoad';
-import { computeStreak, loadEntries, todayIsoDate } from '../../lib/storage';
+import { WEEKLY_IMPRESSION_LABELS } from '../../lib/schema';
+import {
+  computeStreak,
+  lastCompletedWeekStart,
+  loadEntries,
+  loadWeekly,
+  todayIsoDate,
+} from '../../lib/storage';
 import { radius, space, typography, useTheme } from '../../lib/theme';
-import type { DayEntry, IsoDate } from '../../lib/types';
+import type { DayEntry, IsoDate, WeeklyCheckin } from '../../lib/types';
+
+interface TodayData {
+  readonly entries: Readonly<Record<IsoDate, DayEntry>>;
+  readonly weekly: Readonly<Record<IsoDate, WeeklyCheckin>>;
+}
 
 export default function Today() {
   const theme = useTheme();
-  const { data: entries } = useFocusLoad<Readonly<Record<IsoDate, DayEntry>>>(loadEntries, {});
+  const { data } = useFocusLoad<TodayData>(
+    async () => {
+      const [entries, weekly] = await Promise.all([loadEntries(), loadWeekly()]);
+      return { entries, weekly };
+    },
+    { entries: {}, weekly: {} },
+  );
+  const { entries, weekly } = data;
   const today = todayIsoDate();
   const entry = entries[today];
   const streak = computeStreak(entries, today);
+  const weeklyCheckin = weekly[lastCompletedWeekStart(today)];
 
   const morningDone = entry?.morning !== undefined;
   const eveningDone = entry?.evening !== undefined;
@@ -42,7 +62,41 @@ export default function Today() {
           router.push({ pathname: '/checkin', params: { session: 'evening' } });
         }}
       />
+
+      <WeeklyCard checkin={weeklyCheckin} />
     </View>
+  );
+}
+
+/**
+ * Self-resolving, no dismiss chrome: while unanswered it's a single quiet prompt row; once
+ * logged it collapses to a minimal one-line summary. There is nothing to dismiss, so cold-start
+ * re-nagging (Today opens ≥ twice a day) is structurally impossible. Still a `Card` — a bare text
+ * row read as inert, not tappable — but slimmer than the `SessionCard`s (no icon, no status pill)
+ * so it stays visually secondary to the daily loop.
+ */
+function WeeklyCard({ checkin }: { readonly checkin: WeeklyCheckin | undefined }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => {
+        router.push('/weekly');
+      }}
+    >
+      <Card style={styles.weeklyCard}>
+        <Text style={[typography.caption, styles.weeklyText, { color: theme.textMuted }]}>
+          {checkin === undefined
+            ? 'How was last week overall? Tap to log.'
+            : `Last week: ${WEEKLY_IMPRESSION_LABELS[checkin.overall]}`}
+        </Text>
+        <Ionicons
+          name={checkin === undefined ? 'chevron-forward' : 'pencil-outline'}
+          size={16}
+          color={theme.textMuted}
+        />
+      </Card>
+    </Pressable>
   );
 }
 
@@ -120,5 +174,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.xs,
     borderRadius: radius.pill,
+  },
+  weeklyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: space.md,
+  },
+  weeklyText: {
+    flex: 1,
+    marginRight: space.md,
   },
 });

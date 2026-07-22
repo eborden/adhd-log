@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { buildBackup, parseBackup } from '../backup';
 import { isoTimestampNow } from '../storage';
-import type { DayEntry, DoseChange, IsoDate, Rating } from '../types';
+import type { DayEntry, DoseChange, IsoDate, Rating, WeeklyCheckin } from '../types';
 
 const DAY_1 = '2026-07-01' as IsoDate;
+const MONDAY = '2026-06-29' as IsoDate; // a Monday
 
 function morningRow(date: IsoDate, sleepQuality: Rating): DayEntry {
   return {
@@ -20,7 +21,7 @@ describe('buildBackup / parseBackup', () => {
   it('round-trips profile, doses, and entries', () => {
     const doses: readonly DoseChange[] = [{ date: DAY_1, dose: { amount: 40, unit: 'mg' } }];
     const entries = { [DAY_1]: morningRow(DAY_1, 3) };
-    const backup = buildBackup(null, doses, entries);
+    const backup = buildBackup(null, doses, entries, {});
 
     const parsed = parseBackup(JSON.parse(JSON.stringify(backup)));
     expect(parsed).toEqual({ ok: true, value: backup });
@@ -60,6 +61,38 @@ describe('buildBackup / parseBackup', () => {
       profile: null,
       doses: [],
       entries: { 'not-a-date': {} },
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('round-trips a non-empty weekly map', () => {
+    const checkin: WeeklyCheckin = {
+      weekOf: MONDAY,
+      overall: 'better',
+      completedAt: isoTimestampNow(),
+    };
+    const backup = buildBackup(null, [], {}, { [MONDAY]: checkin });
+
+    const parsed = parseBackup(JSON.parse(JSON.stringify(backup)));
+    expect(parsed).toEqual({ ok: true, value: backup });
+  });
+
+  it('parses a legacy backup with no weekly key to an empty map', () => {
+    const exportedAt = isoTimestampNow();
+    const result = parseBackup({ exportedAt, profile: null, doses: [], entries: {} });
+    expect(result).toEqual({
+      ok: true,
+      value: { exportedAt, profile: null, doses: [], entries: {}, weekly: {} },
+    });
+  });
+
+  it('rejects a backup with a malformed weekly value present', () => {
+    const result = parseBackup({
+      exportedAt: isoTimestampNow(),
+      profile: null,
+      doses: [],
+      entries: {},
+      weekly: { [MONDAY]: { weekOf: MONDAY, overall: 'not-a-real-value' } },
     });
     expect(result.ok).toBe(false);
   });

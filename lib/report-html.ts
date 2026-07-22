@@ -26,9 +26,16 @@ import {
   REPORT_RATING_ORDER,
   SIDE_EFFECT_LABELS,
   SIDE_EFFECT_SEVERITY_LABELS,
+  WEEKLY_IMPRESSION_LABELS,
 } from './schema';
 import { palette } from './tokens';
-import { datesInRange, firstOnsetDates, isEveningRatingKey, isMorningRatingKey } from './storage';
+import {
+  addDays,
+  datesInRange,
+  firstOnsetDates,
+  isEveningRatingKey,
+  isMorningRatingKey,
+} from './storage';
 import { recentWindowDates, type SmoothingWindow } from './trends';
 import { SIDE_EFFECTS, assertNever } from './types';
 import type {
@@ -42,6 +49,8 @@ import type {
   ScaleDirection,
   SideEffectSeverity,
   TrendDirection,
+  WeeklyCheckin,
+  WeeklyImpression,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -364,6 +373,91 @@ export function dailyLogCell(metric: Metric, row: DayEntry): string {
   }
 }
 
+/** Dose-taken adherence over the 7 dates of the ISO week starting `weekOf`. */
+export function weeklyAdherence(
+  entries: Readonly<Record<IsoDate, DayEntry>>,
+  weekOf: IsoDate,
+): { readonly taken: number; readonly logged: number } {
+  let taken = 0;
+  let logged = 0;
+  for (let i = 0; i < 7; i += 1) {
+    const entry = entries[addDays(weekOf, i)];
+    const morning = entry?.morning;
+    if (morning !== undefined) {
+      logged += 1;
+      if (morning.doseTaken) taken += 1;
+    }
+  }
+  return { taken, logged };
+}
+
+/** The first dose change (if any) whose date falls within the ISO week starting `weekOf`. */
+export function doseChangeInWeek(
+  doses: readonly DoseChange[],
+  weekOf: IsoDate,
+): DoseChange | undefined {
+  const weekEnd = addDays(weekOf, 6);
+  return doses.find((change) => change.date >= weekOf && change.date <= weekEnd);
+}
+
+/**
+ * Value-free directional glyph for a self-rated weekly impression. Exhaustive over
+ * `WeeklyImpression` — adding a fourth impression fails to compile until this is handled.
+ */
+export function impressionGlyph(overall: WeeklyImpression): string {
+  switch (overall) {
+    case 'worse':
+      return '▼';
+    case 'same':
+      return '▬';
+    case 'better':
+      return '▲';
+    default:
+      return assertNever(overall);
+  }
+}
+
+/**
+ * Descriptive weekly-impression timeline, sorted oldest-first. Every impression renders with the
+ * same neutral chip (no good/bad rating hue — this is the patient's own word, not a judgment),
+ * distinguished only by `impressionGlyph`. Adherence and any in-week dose change ride alongside
+ * each rating so a provider can read a "worse" week against its confounders without
+ * cross-referencing other sections. Omitted entirely when `weekly` is empty.
+ */
+function buildWeeklyTimelineHtml(
+  weekly: Readonly<Record<IsoDate, WeeklyCheckin>>,
+  entries: Readonly<Record<IsoDate, DayEntry>>,
+  doses: readonly DoseChange[],
+): string {
+  const weeks = Object.values(weekly).sort((a, b) => a.weekOf.localeCompare(b.weekOf));
+  if (weeks.length === 0) return '';
+  const rows = weeks
+    .map((checkin) => {
+      const adherence = weeklyAdherence(entries, checkin.weekOf);
+      const adherenceCell =
+        adherence.logged === 0
+          ? '—'
+          : `${String(adherence.taken)}/${String(adherence.logged)} doses`;
+      const change = doseChangeInWeek(doses, checkin.weekOf);
+      const changeCell = change === undefined ? '' : escapeHtml(formatDose(change.dose));
+      const noteCell = checkin.note === undefined ? '' : escapeHtml(checkin.note);
+      return `<tr>
+        <td>${escapeHtml(checkin.weekOf)}</td>
+        <td><span class="impression-chip">${impressionGlyph(checkin.overall)} ${escapeHtml(WEEKLY_IMPRESSION_LABELS[checkin.overall])}</span></td>
+        <td>${adherenceCell}</td>
+        <td>${changeCell}</td>
+        <td>${noteCell}</td>
+      </tr>`;
+    })
+    .join('');
+  return `<h2>Weekly impression timeline</h2>
+     <table>
+       <tr><th>Week of</th><th>Overall</th><th>Adherence</th><th>Dose change</th><th>Note</th></tr>
+       ${rows}
+     </table>
+     <p class="muted">Self-rated, each week compared with the week before — not your starting point. Discuss trends with your provider.</p>`;
+}
+
 /**
  * Options for a report render. Range is resolved before this call (via `datesInRange` /
  * `lastNDates`) and arrives as explicit `rangeStart`/`rangeEnd` params, so it is deliberately
@@ -391,6 +485,7 @@ export function buildReportHtml(
   profile: Profile | null,
   doses: readonly DoseChange[],
   entries: Readonly<Record<IsoDate, DayEntry>>,
+  weekly: Readonly<Record<IsoDate, WeeklyCheckin>>,
   rangeStart: IsoDate,
   rangeEnd: IsoDate,
   options: ReportOptions = DEFAULT_REPORT_OPTIONS,
@@ -534,6 +629,8 @@ export function buildReportHtml(
           )
           .join('')}</ul>`;
 
+  const weeklyTimelineSection = buildWeeklyTimelineHtml(weekly, entries, doses);
+
   // Daily log columns are schema-driven and pruned to metrics with data in range: show everything
   // captured, nothing that wasn't.
   const dailyColumns = dailyLogColumns(rows);
@@ -622,6 +719,10 @@ export function buildReportHtml(
       .spark-line.spark-w1 > .spark { width: 1px; }
       /* Weekly headers go vertical past 5 weeks so a many-week table stays within the page width. */
       th.vhead { writing-mode: vertical-lr; white-space: nowrap; vertical-align: bottom; }
+      /* Neutral encoding for the weekly self-rating: no good/bad rating hue (it's the patient's
+         own word, not a judgment) — one accent color for all three impressions, distinguished
+         only by impressionGlyph's directional glyph. */
+      .impression-chip { background: ${palette.warm100}; color: ${palette.warm900}; border: 1px solid ${palette.pineStrong}; border-radius: 999px; padding: 2px 10px; font-size: 12px; }
       @media print {
         body { background: transparent; }
       }
@@ -631,6 +732,7 @@ export function buildReportHtml(
       ${header}
       ${coverSummary}
       ${doseTimeline}
+      ${weeklyTimelineSection}
       ${weeklySection}
       ${dosePeriodSection}
       ${recentTrendSection}

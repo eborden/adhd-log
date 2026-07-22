@@ -12,12 +12,12 @@ describe('exportPdfReport', () => {
 describe('exportJsonBackup', () => {
   it('deletes an existing file before writing, then shares it', async () => {
     __setMockFileExists(true);
-    await expect(exportJsonBackup(buildBackup(null, [], {}))).resolves.toBeUndefined();
+    await expect(exportJsonBackup(buildBackup(null, [], {}, {}))).resolves.toBeUndefined();
   });
 
   it('writes and shares the backup when no file exists yet', async () => {
     __setMockFileExists(false);
-    await expect(exportJsonBackup(buildBackup(null, [], {}))).resolves.toBeUndefined();
+    await expect(exportJsonBackup(buildBackup(null, [], {}, {}))).resolves.toBeUndefined();
   });
 });
 
@@ -37,7 +37,7 @@ describe('importJsonBackup', () => {
   });
 
   it('returns the parsed backup when the picked file is a valid backup', async () => {
-    const backup = buildBackup(null, [], {});
+    const backup = buildBackup(null, [], {}, {});
     __setMockPickedText(JSON.stringify(backup));
     expect(await importJsonBackup()).toEqual({ ok: true, value: backup });
   });
