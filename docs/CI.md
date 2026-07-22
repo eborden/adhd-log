@@ -31,6 +31,16 @@ Open the workflow run → **Artifacts**:
     device-installable / TestFlight `.ipa` requires an Apple Developer account plus a signing
     certificate and provisioning profile (not configured here).
 
+### Installing a CI-built APK locally
+
+```bash
+npm run apk:ci             # waits for the latest run on main, then adb-installs its APK
+npm run apk:ci -- <run-id> # target a specific run instead of the latest
+```
+
+`scripts/apk-from-ci.mjs` wraps `gh run watch` + `gh run download` + `adb install -r` — the
+same steps as opening the run's Artifacts tab and sideloading by hand, just scripted.
+
 ## Required secrets (Android signing)
 
 The keystore and its passwords are gitignored (`credentials/`), so CI reconstructs them from
