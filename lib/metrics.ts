@@ -125,6 +125,11 @@ export type MetricTrend =
       readonly delta: number;
     };
 
+// Below this sample count, a window's mean rests on too few logged days to read as stable —
+// a data-completeness note, not a clinical threshold. Shared by the report and the in-app
+// "Around dose changes" view so both flag the same way.
+export const FEW_LOGGED_DAYS_THRESHOLD = 3;
+
 // Neutral deadband: |delta| below this renders 'flat'. Chosen at 0.3 of a 1..5 point so a
 // rounding-level wobble never reads as a direction.
 const TREND_DEADBAND = 0.3;

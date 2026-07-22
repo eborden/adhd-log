@@ -1,6 +1,7 @@
 import {
   averageOf,
   computeTrend,
+  FEW_LOGGED_DAYS_THRESHOLD,
   metricAverage,
   ratingAccessor,
   rowsInRange,
@@ -238,11 +239,20 @@ function periodTableHtml(
 /**
  * A before/after table per dose change: before-window mean, after-window mean, and a change arrow
  * routed through `computeTrend` (so the MIN_HALF_SAMPLES floor applies) with the metric's own
- * value-free scale-anchor caption. Metrics empty on both sides are omitted.
+ * value-free scale-anchor caption. Metrics empty on both sides are omitted. `computeTrend` already
+ * returns `insufficient` whenever either side is `'empty'`, so no arrow is ever drawn off a missing
+ * baseline. Each mean cell also carries its sample count (and a "few logged days" note below
+ * `FEW_LOGGED_DAYS_THRESHOLD`); adherence is rendered once per table, since it is a property of
+ * the window, not of any one metric.
  */
 function beforeAfterHtml(items: readonly BeforeAfter[]): string {
   const fmt = (average: MetricAverage): string =>
     average.kind === 'empty' ? '—' : average.mean.toFixed(1);
+  const meanCell = (average: MetricAverage): string => {
+    const n = average.kind === 'empty' ? 0 : average.n;
+    const fewNote = n < FEW_LOGGED_DAYS_THRESHOLD ? ' (few logged days)' : '';
+    return `${fmt(average)}<br /><span class="muted">n=${String(n)}${fewNote}</span>`;
+  };
   const blocks = items.flatMap((item) => {
     const metricRows = REPORT_RATING_ORDER.flatMap((key) => {
       const metric = scaleMetricFor(key);
@@ -257,14 +267,18 @@ function beforeAfterHtml(items: readonly BeforeAfter[]): string {
           ? `— <span class="muted">(${caption})</span>`
           : `${arrowGlyph(trend.direction)} <span class="muted">(${caption})</span>`;
       return [
-        `<tr><td>${escapeHtml(metric.label)}</td><td>${fmt(before)}</td><td>${fmt(after)}</td><td>${changeCell}</td></tr>`,
+        `<tr><td>${escapeHtml(metric.label)}</td><td>${meanCell(before)}</td><td>${meanCell(after)}</td><td>${changeCell}</td></tr>`,
       ];
     });
     if (metricRows.length === 0) return [];
     const title = `${formatDose(item.change.dose)} on ${escapeHtml(item.change.date)} (±${String(item.windowDays)} days)`;
+    const beforeLogged = item.beforeAdherence.takenCount + item.beforeAdherence.notTakenCount;
+    const afterLogged = item.afterAdherence.takenCount + item.afterAdherence.notTakenCount;
+    const adherenceLine = `<p class="muted">Doses taken — before: ${String(item.beforeAdherence.takenCount)}/${String(beforeLogged)} · after: ${String(item.afterAdherence.takenCount)}/${String(afterLogged)}</p>`;
     return [
       `<p><strong>${title}</strong></p>
-       <table><tr><th>Metric</th><th>Before</th><th>After</th><th>Change</th></tr>${metricRows.join('')}</table>`,
+       <table><tr><th>Metric</th><th>Before</th><th>After</th><th>Change</th></tr>${metricRows.join('')}</table>
+       ${adherenceLine}`,
     ];
   });
   return blocks.length === 0 ? '' : `<h2>Before / after dose changes</h2>${blocks.join('')}`;

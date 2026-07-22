@@ -8,7 +8,15 @@ import {
 } from '../report-html';
 import { addDays, isoTimestampNow } from '../storage';
 import { palette } from '../tokens';
-import type { DayEntry, DoseChange, IsoDate, Metric, Profile, Rating } from '../types';
+import type {
+  DayEntry,
+  DoseChange,
+  EveningCheckin,
+  IsoDate,
+  Metric,
+  Profile,
+  Rating,
+} from '../types';
 
 const DAY_1 = '2026-07-01' as IsoDate;
 const DAY_2 = '2026-07-02' as IsoDate;
@@ -25,11 +33,12 @@ function morningRow(date: IsoDate, sleepQuality: Rating): DayEntry {
   };
 }
 
+function eveningCheckin(mood: Rating, anxiety: Rating): EveningCheckin {
+  return { ratings: { mood, anxiety }, sideEffects: {}, completedAt: isoTimestampNow() };
+}
+
 function eveningRatingRow(date: IsoDate, mood: Rating, anxiety: Rating): DayEntry {
-  return {
-    date,
-    evening: { ratings: { mood, anxiety }, sideEffects: {}, completedAt: isoTimestampNow() },
-  };
+  return { date, evening: eveningCheckin(mood, anxiety) };
 }
 
 /** `count` consecutive evening days from `start` with the same mood/anxiety value each day. */
@@ -461,6 +470,103 @@ describe('buildReportHtml', () => {
     const html = htmlFromRows(null, doses, rows);
     expect(html).toContain('Before / after dose changes');
     expect(html).toContain('40mg on 2026-07-05');
+  });
+
+  /** The `<h2>Before / after dose changes</h2>` block, isolated from the rest of the report. */
+  function beforeAfterSectionOf(html: string): string {
+    const marker = '<h2>Before / after dose changes</h2>';
+    const start = html.indexOf(marker);
+    if (start === -1) return '';
+    const rest = html.slice(start + marker.length);
+    const nextHeader = rest.indexOf('<h2>');
+    return nextHeader === -1 ? rest : rest.slice(0, nextHeader);
+  }
+
+  function morningDoseRow(date: IsoDate, doseTaken: boolean): DayEntry {
+    return { date, morning: { ratings: {}, doseTaken, completedAt: isoTimestampNow() } };
+  }
+
+  it('surfaces n under each before/after mean; an empty side renders n=0 with an em-dash mean', () => {
+    const rows = [
+      ...eveningDays('2026-07-01' as IsoDate, 4, 2), // 4 logged evenings before the change
+      { date: '2026-07-05' as IsoDate }, // the change date; nothing logged in the after window
+    ];
+    const doses: readonly DoseChange[] = [
+      { date: '2026-07-05' as IsoDate, dose: { amount: 40, unit: 'mg' } },
+    ];
+    const section = beforeAfterSectionOf(htmlFromRows(null, doses, rows));
+    expect(section).toContain('2.0<br /><span class="muted">n=4');
+    expect(section).toContain('—<br /><span class="muted">n=0');
+  });
+
+  it('surfaces per-window adherence as taken/logged doses, excluding no-entry mornings from the denominator', () => {
+    const rows = [
+      eveningRatingRow('2026-07-07' as IsoDate, 3, 3),
+      eveningRatingRow('2026-07-08' as IsoDate, 3, 3),
+      eveningRatingRow('2026-07-09' as IsoDate, 3, 3),
+      { ...morningDoseRow('2026-07-10' as IsoDate, true), evening: eveningCheckin(3, 3) },
+      { ...morningDoseRow('2026-07-11' as IsoDate, false), evening: eveningCheckin(3, 3) },
+      { date: '2026-07-12' as IsoDate, evening: eveningCheckin(3, 3) }, // no morning entry
+    ];
+    const doses: readonly DoseChange[] = [
+      { date: '2026-07-10' as IsoDate, dose: { amount: 40, unit: 'mg' } },
+    ];
+    const section = beforeAfterSectionOf(
+      htmlFromRows(null, doses, rows, { beforeAfterWindowDays: 3, includeNotes: true }),
+    );
+    // after window (07-10..07-12): 1 taken, 1 not taken, 1 no-entry -> logged = 2, taken = 1.
+    expect(section).toContain('after: 1/2');
+    // before window (07-07..07-09) has no morning entries at all -> 0 taken of 0 logged.
+    expect(section).toContain('before: 0/0');
+  });
+
+  it('flags only the side with n < 3 as "few logged days"', () => {
+    const rows = [
+      ...eveningDays('2026-07-01' as IsoDate, 2, 2), // before: only 2 logged evenings
+      ...eveningDays('2026-07-05' as IsoDate, 4, 4), // on/after: 4 logged evenings
+    ];
+    const doses: readonly DoseChange[] = [
+      { date: '2026-07-05' as IsoDate, dose: { amount: 40, unit: 'mg' } },
+    ];
+    const section = beforeAfterSectionOf(
+      htmlFromRows(null, doses, rows, { beforeAfterWindowDays: 4, includeNotes: true }),
+    );
+    expect(section).toContain('n=2 (few logged days)');
+    expect(section).not.toContain('n=4 (few logged days)');
+  });
+
+  function morningAndEveningRow(date: IsoDate, doseTaken: boolean, mood: Rating): DayEntry {
+    return { ...morningDoseRow(date, doseTaken), evening: eveningCheckin(mood, mood) };
+  }
+
+  it('computes adherence per dose-change window, not over the whole range', () => {
+    const rows = [
+      morningAndEveningRow('2026-07-01' as IsoDate, true, 3),
+      morningAndEveningRow('2026-07-02' as IsoDate, true, 3),
+      morningAndEveningRow('2026-07-05' as IsoDate, false, 4),
+      morningAndEveningRow('2026-07-06' as IsoDate, false, 4),
+    ];
+    const doses: readonly DoseChange[] = [
+      { date: '2026-07-02' as IsoDate, dose: { amount: 20, unit: 'mg' } },
+      { date: '2026-07-06' as IsoDate, dose: { amount: 40, unit: 'mg' } },
+    ];
+    const html = htmlFromRows(null, doses, rows, { beforeAfterWindowDays: 1, includeNotes: true });
+    // First change's after-window (07-02): 1 taken of 1 logged. Second's (07-06): 0 taken of 1.
+    expect(html).toContain('after: 1/1');
+    expect(html).toContain('after: 0/1');
+  });
+
+  it('draws no change arrow when either side of a before/after comparison is empty', () => {
+    const rows = [
+      ...eveningDays('2026-07-01' as IsoDate, 4, 2), // before: 4 logged evenings
+      { date: '2026-07-05' as IsoDate }, // the change date; after window stays empty
+    ];
+    const doses: readonly DoseChange[] = [
+      { date: '2026-07-05' as IsoDate, dose: { amount: 40, unit: 'mg' } },
+    ];
+    const section = beforeAfterSectionOf(htmlFromRows(null, doses, rows));
+    expect(section).not.toMatch(/[▲▼▬]/);
+    expect(section).toContain('—');
   });
 
   it('shows the multi-dose caveat when a dose change falls inside the range', () => {

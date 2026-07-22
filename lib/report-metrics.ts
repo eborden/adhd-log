@@ -139,6 +139,8 @@ export interface BeforeAfter {
   readonly windowDays: number;
   readonly before: ReadonlyMap<RatingKey, MetricAverage>;
   readonly after: ReadonlyMap<RatingKey, MetricAverage>;
+  readonly beforeAdherence: AdherenceSummary;
+  readonly afterAdherence: AdherenceSummary;
 }
 
 export function beforeAfterDose(
@@ -161,7 +163,14 @@ export function beforeAfterDose(
     before.set(key, metricAverage(beforeRows, pick));
     after.set(key, metricAverage(afterRows, pick));
   }
-  return { change, windowDays, before, after };
+  return {
+    change,
+    windowDays,
+    before,
+    after,
+    beforeAdherence: computeAdherence(beforeRows),
+    afterAdherence: computeAdherence(afterRows),
+  };
 }
 
 export interface SideEffectSummaryRow {
