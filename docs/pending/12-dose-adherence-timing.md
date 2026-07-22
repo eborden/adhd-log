@@ -167,21 +167,21 @@ export function isDoseMissReason(value: unknown): value is DoseMissReason {
 }
 ```
 
-`parseDoseRecord` builds the current-shape union, **dropping** any field that the chosen arm cannot carry (so a hand-edited or buggy-future `{ status: 'missed', timeTaken }` is normalized to a valid `missed` record rather than smuggling an illegal combination past the boundary — this is the storage-layer half of the illegal-states fix, complementing the type-level union):
+`parseDoseRecord` builds the current-shape union, **dropping** any field that the chosen arm cannot carry (so a hand-edited or buggy-future `{ status: 'missed', timeTaken }` is normalized to a valid `missed` record rather than smuggling an illegal combination past the boundary — this is the storage-layer half of the illegal-states fix, complementing the type-level union). It returns `DoseRecord | undefined`, matching the house `parse*` idiom (`parseEveningCheckin`, `parseDayEntry`, `parseSideEffectReports` all return `| undefined`); a local `null` is used only as an intermediate "present-but-malformed" sentinel, distinct from `undefined` = absent:
 
 ```ts
-function parseDoseRecord(value: Record<string, unknown>): DoseRecord | null {
+function parseDoseRecord(value: Record<string, unknown>): DoseRecord | undefined {
   const status = value['status'];
-  if (!isDoseStatus(status)) return null;
+  if (!isDoseStatus(status)) return undefined;
 
   const rawTime = value['timeTaken'];
   const timeTaken = rawTime === undefined ? undefined : isTimeOfDay(rawTime) ? rawTime : null;
-  if (timeTaken === null) return null; // present but malformed → reject
+  if (timeTaken === null) return undefined; // present but malformed → reject
 
   const rawReason = value['reason'];
   const reason =
     rawReason === undefined ? undefined : isDoseMissReason(rawReason) ? rawReason : null;
-  if (reason === null) return null; // present but malformed → reject
+  if (reason === null) return undefined; // present but malformed → reject
 
   switch (status) {
     case 'taken':
@@ -199,7 +199,7 @@ function parseDoseRecord(value: Record<string, unknown>): DoseRecord | null {
   }
 }
 
-function readDoseRecord(value: Record<string, unknown>): DoseRecord | null {
+function readDoseRecord(value: Record<string, unknown>): DoseRecord | undefined {
   const dose = value['dose'];
   if (isRecord(dose)) return parseDoseRecord(dose); // new shape
   const legacy = value['doseTaken'];
@@ -207,26 +207,30 @@ function readDoseRecord(value: Record<string, unknown>): DoseRecord | null {
     // legacy migrate-on-read
     return legacy ? { status: 'taken' } : { status: 'missed' };
   }
-  return null;
+  return undefined;
 }
+```
 
-export function migrateMorningCheckin(value: unknown): MorningCheckin | null {
-  if (!isRecord(value)) return null;
+**This mirrors the landed side-effect-severity precedent, not a new parse architecture.** Morning currently has no transformer — `parseDayEntry` validates it with the passthrough guard `isMorningCheckin` (`lib/storage.ts:141`, its only caller). Because the dose field now needs migration (`doseTaken` boolean → `DoseRecord`), morning must become a transforming minter exactly as evening already did for its `string[]` → keyed-record side-effect migration: `isEveningCheckin` was retired in favor of `parseEveningCheckin` (see `docs/DECISIONS.md`, "Parse-don't-validate, sole minters"). So we add `parseMorningCheckin` — the sole minter — and retire the passthrough `isMorningCheckin`:
+
+```ts
+export function parseMorningCheckin(value: unknown): MorningCheckin | undefined {
+  if (!isRecord(value)) return undefined;
   const ratingsRaw = value['ratings'];
-  if (!isRecord(ratingsRaw)) return null;
+  if (!isRecord(ratingsRaw)) return undefined;
   const ratings: Partial<Record<MorningRatingKey, Rating>> = {};
   for (const key of MORNING_RATING_KEYS) {
     const rating = ratingsRaw[key];
     if (rating === undefined) continue; // sparse ratings are legal
-    if (!isRating(rating)) return null;
+    if (!isRating(rating)) return undefined;
     ratings[key] = rating;
   }
-  if (!isIsoTimestamp(value['completedAt'])) return null;
+  if (!isIsoTimestamp(value['completedAt'])) return undefined;
   const sleepHours = value['sleepHours'];
-  if (!(sleepHours === undefined || typeof sleepHours === 'number')) return null;
+  if (!(sleepHours === undefined || typeof sleepHours === 'number')) return undefined;
 
   const dose = readDoseRecord(value);
-  if (dose === null) return null;
+  if (dose === undefined) return undefined;
 
   return {
     dose,
@@ -237,9 +241,21 @@ export function migrateMorningCheckin(value: unknown): MorningCheckin | null {
 }
 ```
 
-_(The `ratings` record is read from the nested `value['ratings']` — the current on-disk shape — exactly as the live `isMorningCheckin`/`isRatingsRecord` path does; only the dose field is transformed. `readDoseRecord` still handles the legacy `doseTaken` boolean → `DoseRecord` migration. Building `ratings` by iterating `MORNING_RATING_KEYS` and narrowing each with `isRating` type-checks without assertion.)_
+_(The `ratings` record is read from the nested `value['ratings']` — the current on-disk shape — exactly as the live `isMorningCheckin`/`isRatingsRecord` path does; only the dose field is transformed. `readDoseRecord` handles the legacy `doseTaken` boolean → `DoseRecord` migration. Building `ratings` by iterating `MORNING_RATING_KEYS` and narrowing each with `isRating` type-checks without assertion.)_
 
-The two current-shape narrowers the design retains are updated in step so they never diverge from the migrator on what counts as valid (they reject legacy `doseTaken` — that is the migrator's job):
+No separate `migrateDayEntry` is added: the existing `parseDayEntry` (`lib/storage.ts:216`) already routes morning and evening, so its morning branch changes by one line — from the `isMorningCheckin` passthrough to the `parseMorningCheckin` transformer, exactly matching its existing evening branch (`evening = parseEveningCheckin(eveningRaw); if (evening === undefined) return undefined;`):
+
+```ts
+// inside the existing parseDayEntry, replacing the morning passthrough:
+const morningRaw = value['morning'];
+let morning: MorningCheckin | undefined;
+if (morningRaw !== undefined) {
+  morning = parseMorningCheckin(morningRaw);
+  if (morning === undefined) return undefined;
+}
+```
+
+`isMorningCheckin` had no other caller, so it is removed (mirroring the retired `isEveningCheckin`). The write path keeps a new-shape validity check on `DoseRecord` itself — `isDoseRecord` — which the check-in construction and tests use to assert a freshly-built record is well-formed (it rejects legacy `doseTaken`, since minting that is the migrator's job):
 
 ```ts
 export function isDoseRecord(value: unknown): value is DoseRecord {
@@ -254,82 +270,21 @@ export function isDoseRecord(value: unknown): value is DoseRecord {
   if (status === 'taken' && reason !== undefined) return false;
   return true;
 }
-
-export function isMorningCheckin(value: unknown): value is MorningCheckin {
-  if (!isRecord(value)) return false;
-  if (!isDoseRecord(value['dose'])) return false;
-  if (!isRatingsRecord(value['ratings'], MORNING_RATING_KEYS)) return false;
-  if (!isIsoTimestamp(value['completedAt'])) return false;
-  const sleepHours = value['sleepHours'];
-  return sleepHours === undefined || typeof sleepHours === 'number';
-}
 ```
 
-The read path routes morning through the migrator via `migrateDayEntry`:
+### Failure granularity — already solved by the landed two-caller split
 
-```ts
-export function migrateDayEntry(value: unknown): DayEntry | null {
-  if (!isRecord(value) || !isIsoDate(value['date'])) return null;
-  const morningRaw = value['morning'];
-  const morning = morningRaw === undefined ? undefined : migrateMorningCheckin(morningRaw);
-  if (morning === null) return null;
-  const eveningRaw = value['evening'];
-  const evening =
-    eveningRaw === undefined ? undefined : isEveningCheckin(eveningRaw) ? eveningRaw : null;
-  if (evening === null) return null;
-  return {
-    date: value['date'],
-    ...(morning !== undefined ? { morning } : {}),
-    ...(evening !== undefined ? { evening } : {}),
-  };
-}
-```
+The panel's data-model lens flagged that a single un-migratable day must not silently destroy history. When this doc was first drafted that was a real risk, but the tolerant-parsing work (doc 03) and the side-effect-severity migration (former doc 10) have since landed and **already provide exactly the two-caller split this section originally proposed to build** — so there is nothing new to add here. Grounding against the **current** code:
 
-### Failure granularity — resolved, not left implicit
+- **Strict, all-or-nothing — `parseEntries`** (`lib/storage.ts:251`) — used by **import** via `parseBackup`. It walks the map, routes each day through `parseDayEntry`, and returns `ok:false` on the first bad day. Because `parseDayEntry` will now call `parseMorningCheckin`, backup import migrates legacy `doseTaken` days for free.
 
-The panel's data-model lens flagged that a single un-migratable day must not silently destroy history, and that behavior was under-specified. Grounding against the **actual** current code: `loadEntries` does `return parsed.ok ? parsed.value : {}` (`lib/storage.ts:308`) — so _any_ `ok:false` from the parser makes the entire in-memory history vanish (the on-disk blob is untouched, but the app shows nothing). Blob-level rejection is therefore far more destructive here than the review assumed. Two callers with opposite needs resolve this cleanly:
+- **Resilient, day-level salvage — `parseEntriesTolerant`** (`lib/storage.ts:277`, returning `EntriesParse` = `{ entries, droppedKeys, hardFailure }`) — used by the on-device **read path**. `loadEntries` (`lib/storage.ts:517`) already calls it, keeps every day that parses, and quarantines the raw blob (`quarantineEntries`) on a hard failure or dropped keys rather than clobbering it. The old `return parsed.ok ? parsed.value : {}` fallback this section used to cite is gone.
 
-- **Strict, all-or-nothing (`parseEntries`)** — used by **import** (`parseBackup`), where a corrupt file should fail loudly with the offending date named, not partially apply:
-
-  ```ts
-  export function parseEntries(raw: unknown): Parsed<Readonly<Record<IsoDate, DayEntry>>> {
-    if (!isRecord(raw)) return { ok: false, reason: 'Malformed entries JSON' };
-    const out: Record<IsoDate, DayEntry> = {};
-    for (const [key, entry] of Object.entries(raw)) {
-      if (!isIsoDate(key)) return { ok: false, reason: `Malformed entries JSON: bad key ${key}` };
-      const migrated = migrateDayEntry(entry);
-      if (migrated === null) return { ok: false, reason: `Malformed entry for ${key}` };
-      out[key] = migrated;
-    }
-    return { ok: true, value: out };
-  }
-  ```
-
-- **Resilient, day-level salvage (`salvageEntries`)** — used by the on-device **read path** so one corrupt day never hides the rest of a provider-facing record:
-
-  ```ts
-  export function salvageEntries(raw: unknown): {
-    readonly value: Readonly<Record<IsoDate, DayEntry>>;
-    readonly dropped: readonly IsoDate[];
-  } {
-    if (!isRecord(raw)) return { value: {}, dropped: [] };
-    const out: Record<IsoDate, DayEntry> = {};
-    const dropped: IsoDate[] = [];
-    for (const [key, entry] of Object.entries(raw)) {
-      if (!isIsoDate(key)) continue;
-      const migrated = migrateDayEntry(entry);
-      if (migrated === null) dropped.push(key);
-      else out[key] = migrated;
-    }
-    return { value: out, dropped };
-  }
-  ```
-
-  `loadEntries` switches to `salvageEntries` and keeps every day that migrates. Because the boolean→`DoseRecord` transform is **total over well-formed legacy data**, the only day that can drop is one already corrupt by other means — so in practice nothing is lost, and the worst case degrades from "lose all history" to "lose one bad day." Dropping is deliberately silent to the user (no scary UI), but `dropped` is available for a future diagnostic surface. Losing one unrecoverable day beats both hiding all history and silently importing a bad backup — hence the two-caller split rather than a single behavior.
+Both callers route through the single shared `parseDayEntry`, so folding the dose migration into `parseMorningCheckin` (which `parseDayEntry` calls) gives strict import and resilient read the migration for free — the same seam the side-effect-severity migration used. Because the boolean→`DoseRecord` transform is **total over well-formed legacy data**, no well-formed legacy day can drop; the worst case is the pre-existing "one already-corrupt day is quarantined, the rest load," never "lose all history." `droppedKeys` remains available for a future diagnostic surface. No change to `loadEntries`, `parseEntries`, or `parseEntriesTolerant` signatures is required — only the one-line morning-branch swap inside `parseDayEntry` described above.
 
 ### Backward compatibility
 
-No forced re-onboarding: `Profile` is untouched. Historical `entries` are never rewritten on disk — a legacy `doseTaken: false` day is migrated to `{ status: 'missed' }` **in memory** and only persisted in the new shape when that day is next saved via `saveCheckin` (migrate-on-read). **Import path fix (corrects a factual error in the earlier draft):** `parseBackup` in `lib/export.ts` currently calls `isEntries(entries)` directly (`lib/export.ts:229`, imported at `:8`) — _not_ `parseEntries`. Since `isEntries → isDayEntry → isMorningCheckin` now require the new `dose` shape, leaving `parseBackup` as-is would make **every historical JSON backup fail to import wholesale** (`'Malformed backup: invalid entries'`). Fix: `parseBackup` must call `parseEntries(entries)` and use its `.ok`/`.value`/`.reason`, dropping the `isEntries` import. This is a required code change, not something that "already works." The **export/write** side is confirmed safe: `buildBackup` sources `entries` from an already-migrated in-memory `Record<IsoDate, DayEntry>` via `loadEntries()`, so freshly-written backups never contain legacy `doseTaken` shapes — the round-trip is covered in both directions.
+No forced re-onboarding: `Profile` is untouched. Historical `entries` are never rewritten on disk — a legacy `doseTaken: false` day is migrated to `{ status: 'missed' }` **in memory** and only persisted in the new shape when that day is next saved via `saveCheckin` (migrate-on-read). **Import path — already correct, no change needed.** An earlier draft claimed `parseBackup` called `isEntries(entries)` directly and would reject legacy backups wholesale. That is stale: `parseBackup` now lives in `lib/backup.ts` (`:29`) and already calls `parseEntries(raw['entries'])` (`lib/backup.ts:45`); `isEntries` no longer exists. Because `parseEntries` routes every day through `parseDayEntry` — which this doc changes to call `parseMorningCheckin` — legacy `doseTaken` backups migrate on import automatically once the morning-branch swap lands, with no edit to `backup.ts`. `backup.test.ts` already exercises legacy-entries import and gains a dose-shape case (see Test plan). The **export/write** side is confirmed safe: `buildBackup` sources `entries` from an already-migrated in-memory `Record<IsoDate, DayEntry>` via `loadEntries()`, so freshly-written backups never contain legacy `doseTaken` shapes — the round-trip is covered in both directions.
 
 ## UI touch points
 
@@ -374,7 +329,15 @@ No forced re-onboarding: `Profile` is untouched. Historical `entries` are never 
 
 ## Export / report
 
-`lib/report-metrics.ts` (pure report tallies; the HTML assembly lives in `lib/report-html.ts`, and `lib/export.ts` is native I/O only after the provider-report overhaul). The tally answers "how much drug, on schedule how often, out of how many days, and why not" — all descriptive, all self-reported:
+`lib/report-metrics.ts` (pure report tallies; the HTML assembly lives in `lib/report-html.ts`, and `lib/export.ts` is native I/O only after the provider-report overhaul). The tally answers "how much drug, on schedule how often, out of how many days, and why not" — all descriptive, all self-reported.
+
+**Reconcile the shipped adherence helpers first — they read the removed field.** The provider-report overhaul already ships adherence off `morning.doseTaken`: `computeAdherence` → `AdherenceSummary` (taken / not-taken / no-entry, `lib/report-metrics.ts:218`) rendered as the report's "Adherence" block, and `adherenceInWindow` → `{ taken, logged }` (`lib/report-metrics.ts:260`) feeding the recent-window line; the daily-log Dose cell also reads `row.morning.doseTaken` (`lib/report-html.ts:332`). Since this doc **removes** `doseTaken`, all three stop compiling and must be updated to the three-state `dose.status`, not merely supplemented:
+
+- The richer `doseAdherence` below **supersedes** `computeAdherence` for the report's adherence block — its taken/late/missed counts and two rates strictly contain the old taken/not-taken split (`missed` ≈ old not-taken; `late` is the new middle state the boolean couldn't hold). Either retire `computeAdherence`/`AdherenceSummary` in favor of `doseAdherence`, or reduce the block to it; do not leave both computing off different fields.
+- `adherenceInWindow` is updated to read `dose.status` (count `taken`+`late` as received, or keep `taken` only — match whichever the recent-window line already labels) so the recent line keeps working.
+- The daily-log Dose cell swaps `doseTaken ? 'Yes' : 'No'` for `DOSE_STATUS_LABELS[dose.status]` (already described below).
+
+The new tallies:
 
 ```ts
 export interface DoseAdherence {
@@ -472,7 +435,7 @@ export function doseTimingSpan(rows: readonly DayEntry[]): DoseTimingSpan | null
 - **Dose times: earliest–latest** from `doseTimingSpan` (or "—") — a one-line timing-variability signal so the provider can judge at a glance whether timing has been a confound, without reading every daily row (clinical suggestion; a cheap interim for the deferred adherence strip).
 - **Reasons given** from `doseMissReasons`, listing only non-zero reasons via `DOSE_MISS_REASON_LABELS`, so a cluster of missed doses carries the behavioral-vs-clinical lead the provider needs (clinical must-fix).
 
-The Daily-log table gains a **Dose** column showing `DOSE_STATUS_LABELS[status]`, the formatted `timeTaken` where present, and the reason label where present. Every value passes through `escapeHtml`; status cells use the existing rating palette (`good`/`neutral`/`bad`) via the same inline-style approach as other colored cells — the palette is presentation, not a judgment. The per-period / before-after averages tables already shipped with the **provider-report overhaul** (former doc 06, now in `docs/DECISIONS.md`); slot the adherence block above them in the existing `report-html.ts` structure.
+The Daily-log table's existing dose cell (today a `doseTaken ? 'Yes' : 'No'`) becomes a **Dose** cell showing `DOSE_STATUS_LABELS[status]`, the formatted `timeTaken` where present, and the reason label where present. Every value passes through `escapeHtml`; status cells use the existing rating palette (`good`/`neutral`/`bad`) via the same inline-style approach as other colored cells — the palette is presentation, not a judgment. The per-period / before-after averages tables already shipped with the **provider-report overhaul** (former doc 06, now in `docs/DECISIONS.md`); slot the adherence block above them in the existing `report-html.ts` structure.
 
 ## Notifications
 
@@ -484,12 +447,13 @@ New/extended Vitest specs in the covered `lib/` modules, using the sanctioned `a
 
 - **`lib/__tests__/storage.test.ts`**
   - `isDoseStatus` / `isDoseMissReason` accept every member, reject `'skipped'`/`'meh'`, `true`, `undefined`, non-strings.
-  - `parseDoseRecord`: `taken`/`late`/`missed` round-trip; `{ status: 'missed', timeTaken }` normalizes to `{ status: 'missed' }` (illegal field dropped); `{ status: 'taken', reason }` drops the reason; malformed `timeTaken`/`reason` → `null`.
-  - `migrateMorningCheckin`: legacy `{ doseTaken: true, … }` → `dose.status === 'taken'`; `{ doseTaken: false }` → `'missed'`; a new-shape record round-trips unchanged; missing both `dose` and `doseTaken` → `null`.
-  - `parseEntries` (strict) migrates a record mixing one legacy-boolean day and one new-shape day, and returns `ok:false` naming the date on a genuinely malformed day.
-  - `salvageEntries` (resilient) keeps good days and reports the bad one in `dropped` rather than discarding all; a lone corrupt day does **not** empty the result.
+  - `parseDoseRecord`: `taken`/`late`/`missed` round-trip; `{ status: 'missed', timeTaken }` normalizes to `{ status: 'missed' }` (illegal field dropped); `{ status: 'taken', reason }` drops the reason; malformed `timeTaken`/`reason` → `undefined`.
+  - `parseMorningCheckin`: legacy `{ doseTaken: true, … }` → `dose.status === 'taken'`; `{ doseTaken: false }` → `'missed'`; a new-shape record round-trips unchanged; missing both `dose` and `doseTaken` → `undefined`. (Also assert `parseDayEntry` routes a legacy-morning day through it — the one changed line.)
+  - `parseEntries` (strict, existing) migrates a record mixing one legacy-boolean day and one new-shape day, and returns `ok:false` naming the date on a genuinely malformed day — extended, not newly written.
+  - `parseEntriesTolerant` (resilient, existing) keeps good days and reports the bad one in `droppedKeys` rather than discarding all; a lone corrupt day does **not** empty the result — extended to cover a legacy-dose day.
   - Round-trip: a legacy blob loaded via `loadEntries` yields `dose.status`, and is _not_ written back on read — assert `AsyncStorage.setItem` is not called on load via the `lib/__mocks__` mock.
 - **`lib/__tests__/report-metrics.test.ts`** (where the existing `computeAdherence` / `adherenceInWindow` specs live)
+  - Update the existing `computeAdherence` / `adherenceInWindow` fixtures (and, if `computeAdherence` is superseded by `doseAdherence`, remove its specs) since both stop reading `doseTaken`; fixtures move from `doseTaken: boolean` to `dose: DoseRecord`.
   - `doseAdherence` counts across a range with gaps; `exposureRate`/`onTimeRate === null` when nothing logged; a hand-built fixture where all doses are `late` yields `exposureRate === 1` but `onTimeRate === 0` (the exact case the two-rate split exists to disambiguate); `totalDays` reflects range length, not just logged days.
   - `doseMissReasons` tallies only `late`/`missed` reasons; `doseTimingSpan` returns earliest/latest and `null` when no time recorded.
 - **`lib/__tests__/report-html.test.ts`**
@@ -524,7 +488,7 @@ Coverage stays ≥ thresholds (lines/statements/functions 90, branches 85): the 
 - **Single `takenRate`.** Rejected/resolved — replaced by the labeled exposure + on-time pair so a late-but-complete trial isn't misread as non-adherent.
 - **Resolved:** should `late` count toward exposure? Yes for the exposure rate (real drug received), no for the on-time rate — both are shown, so the provider reads whichever the clinical question calls for.
 - **Open:** an adherence strip under the trend chart (dot per day colored by status) — deferred to a follow-up so `trends.tsx` stays schema-driven here. The `doseTimingSpan` line is the cheap interim.
-- **Open:** whether the resilient read path should ever surface `dropped` days to the user (currently silent) — deferred until there's evidence a legacy day can drop in practice.
+- **Open:** whether the resilient read path should ever surface `droppedKeys` days to the user (currently silent, and already quarantined by `loadEntries`) — deferred until there's evidence a legacy day can drop in practice.
 
 ## Panel review
 
@@ -542,7 +506,7 @@ Coverage stays ≥ thresholds (lines/statements/functions 90, branches 85): the 
 
 - **Draft field convention (must-fix, TS2375):** applied — `doseStatus`/`timeTaken`/`doseReason` are `T | undefined` required keys matching `sleepHours`, never `?:`.
 - **Illegal states actually unrepresentable (must-fix):** applied via the stronger of the two offered options — `DoseRecord` is a discriminated union so `missed + timeTaken` / `taken + reason` are unrepresentable, _and_ `parseDoseRecord` normalizes any such combination out at the boundary.
-- **Show updated `isMorningCheckin`/`isDayEntry` (suggestion):** applied — updated `isDoseRecord` + `isMorningCheckin` bodies included so guards and migrator don't diverge.
+- **Show updated guard/minter bodies (suggestion):** applied — `isDoseRecord` and the new `parseMorningCheckin` minter are shown. Per the landed parse-don't-validate seam, the passthrough `isMorningCheckin` is retired (it can't migrate) in favor of `parseMorningCheckin`, mirroring how `isEveningCheckin` gave way to `parseEveningCheckin`; the one-line morning-branch swap inside the existing `parseDayEntry` is spelled out so guards and minter can't diverge.
 - **Derive `isDoseStatus` from `DOSE_STATUSES` (suggestion):** applied — both guards derive from their const arrays, matching `isSideEffect`.
 - **Narrowing-survives-call confirmation (no action):** noted; the migrator shape is kept as verified.
 
@@ -556,8 +520,8 @@ Coverage stays ≥ thresholds (lines/statements/functions 90, branches 85): the 
 
 ### Data-model / migration + privacy + scope — approve-with-changes
 
-- **`parseBackup` routes through `parseEntries` (must-fix):** applied — corrected the earlier false claim; `parseBackup` calls `parseEntries` (dropping the direct `isEntries` call at export.ts:229), with a legacy-backup import test to lock it in.
-- **Single-day failure behavior (must-fix):** applied with a decision grounded in the real `loadEntries` fallback (`return … : {}`, i.e. total in-memory history loss): strict `parseEntries` for import (loud, names the date) and a resilient `salvageEntries` for the read path (keeps good days, drops only the corrupt one). Chosen over blanket blob rejection precisely because the current fallback is more destructive than the review assumed.
+- **`parseBackup` routes through `parseEntries` (must-fix):** now a no-op — this already shipped. `parseBackup` lives in `lib/backup.ts` and already calls `parseEntries(raw['entries'])`; `isEntries` no longer exists. Legacy `doseTaken` backups migrate on import for free once `parseDayEntry` calls `parseMorningCheckin`. Only the `backup.test.ts` legacy-import case is extended to the new dose shape.
+- **Single-day failure behavior (must-fix):** already solved by landed code, not built here. The strict/resilient two-caller split the earlier draft proposed exists: `parseEntries` (strict import) and `parseEntriesTolerant` (resilient read via `loadEntries`, with `quarantineEntries`). The old `loadEntries` `return … : {}` fallback is gone. Folding dose migration into the shared `parseDayEntry` gives both callers the migration with no signature change.
 - **`buildBackup` sources migrated entries (suggestion):** applied — one-line confirmation added.
 - **`DoseChange` needs no migration (suggestion):** applied — stated explicitly in Non-goals.
 

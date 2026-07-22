@@ -42,14 +42,15 @@ without a meaningful scope.
   the landed report overhaul (doc 06 — see `docs/DECISIONS.md`) consumes for a "Since last visit" / "Since starting" preset.
   It **always** returns a range — never `null` — anchoring on `startDate` when there is no
   past visit.
-- Provide `adherenceInRange(rows)` as pure, tested `lib/` logic so the scoped provider report
-  can surface a descriptive medication-adherence summary (doses taken vs. logged mornings) —
-  the largest non-clinical confound for interpreting a titration trend must not go unstated.
+- Surface a descriptive medication-adherence summary (doses taken vs. logged mornings) beside
+  the scoped range — the largest non-clinical confound for interpreting a titration trend must
+  not go unstated. This reuses the landed doc 06 helper `adherenceInWindow` (no new helper).
 - Optional one-off, single-fire "appointment soon — export your report" reminder for a
   future-dated visit, which never surfaces a fresh permission prompt.
 - Optional visit markers on Trends, reusing the `markersRow` dot pattern.
-- Extend the JSON backup to round-trip visits, wire `restoreBackup` to persist them, and
-  wire `clearAllData` to purge them.
+- Extend the JSON backup to round-trip visits and wire `restoreBackup` to persist them. No
+  full-wipe path exists in the codebase today; if one is ever added it must also purge the
+  visits key (recorded as a forward obligation in Storage & guards, not built here).
 
 **Non-goals**
 
@@ -242,17 +243,14 @@ happened," and when none has, "since starting the medication." `start <= end` ho
 arms: a past visit is `< today` so `addDays(+1) <= today`, and `startDate <= today` for any
 real med start.
 
-**Full-wipe path.** `clearAllData` **must** add `VISITS_KEY` to the keys it removes (it does
-not today), and the Settings "clear all data" handler must call
-`cancelAllVisitReminders(await loadVisits())` (see Notifications) _before_ the wipe, so a user
-expecting a full on-device clear is not left with surviving `Visit` records or a stale
-scheduled local notification pointing at a deleted visit date.
-
-> **Accuracy note (flag).** As of this pass there is **no** `clearAllData` function and no
-> "clear all data" handler anywhere in the codebase (`lib/storage.ts` exposes no full-wipe
-> primitive; Settings has no clear/reset control). This section presumes a full-wipe path that
-> does not yet exist — whoever builds it must include `VISITS_KEY` and the pre-wipe
-> `cancelAllVisitReminders` call described here.
+**Full-wipe path (forward obligation, not built here).** There is **no** `clearAllData` function
+and no "clear all data" handler anywhere in the codebase today — `lib/storage.ts` exposes no
+full-wipe primitive and Settings has no clear/reset control. So this feature adds nothing to a
+wipe path that does not exist. The obligation is recorded for whoever builds one later: a
+full-wipe **must** remove the visits key alongside `profile`/`doses`/`entries`, and the wipe
+handler **must** call `cancelAllVisitReminders(await loadVisits())` (see Notifications) _before_
+the wipe, so a user expecting a full on-device clear is not left with surviving `Visit` records
+or a stale scheduled local notification pointing at a deleted visit date.
 
 **Backward compatibility.** Purely additive:
 
@@ -341,34 +339,20 @@ its selector would be net-new work, not an addition to an existing selector.)
   Because the helper is total, **the report's preset is always enabled** — there is no disabled
   state to design — and its label follows `.anchor`.
 
-- **Adherence summary within the scoped range.** (Accuracy note: the landed doc 06 **already**
-  computes and renders adherence — `computeAdherence` and `adherenceInWindow` in
-  `lib/report-metrics.ts`, surfaced by `buildReportHtml`. The `adherenceInRange` helper below
-  overlaps those; it should be reconciled with — likely folded into — the existing helpers
-  rather than added anew.) This doc adds a pure, tested helper so a provider reading a "since
-  last visit" trend can distinguish "medication isn't working" from "doses were frequently
-  skipped":
+- **Adherence summary within the scoped range — reuse the shipped helper, add nothing.** The
+  landed doc 06 already ships exactly this: `adherenceInWindow(rows): { taken, logged }` in
+  `lib/report-metrics.ts` counts doses taken vs. logged mornings over any row set, and
+  `computeAdherence` produces the fuller taken/not-taken/no-entry `AdherenceSummary` that
+  `buildReportHtml` renders. An earlier draft of this doc proposed a new
+  `adherenceInRange(rows): { takenDays, loggedMornings }` — but that is the same loop over the
+  same field (`row.morning?.doseTaken`) with only the result keys renamed, so it is dropped: the
+  "since last visit" range feeds `rowsInRange` output straight into the existing
+  `adherenceInWindow` / `computeAdherence`. This keeps the provider's "medication isn't working"
+  vs. "doses were frequently skipped" distinction while adding no duplicate helper.
 
-  ```ts
-  export function adherenceInRange(rows: readonly DayEntry[]): {
-    readonly takenDays: number;
-    readonly loggedMornings: number;
-  } {
-    let takenDays = 0;
-    let loggedMornings = 0;
-    for (const row of rows) {
-      if (row.morning !== undefined) {
-        loggedMornings += 1;
-        if (row.morning.doseTaken) takenDays += 1;
-      }
-    }
-    return { takenDays, loggedMornings };
-  }
-  ```
-
-  Rendered as e.g. "Doses taken: 12 of 14 logged mornings." We report against _logged_
-  mornings, not calendar days, so an unlogged day is never silently misrepresented as a
-  skipped dose — the count stays a fact, not an inference.
+  Because those helpers count against _logged_ mornings, not calendar days, an unlogged day is
+  never silently misrepresented as a skipped dose — the count stays a fact, not an inference.
+  Rendered as e.g. "Doses taken: 12 of 14 logged mornings."
 
 - **`buildReportHtml` (in `lib/report-html.ts`) renders a "Visits in range" `<ul>`** as the dose-change section's
   sibling, listing each visit date and, if present, its note. **Every field runs through
@@ -407,8 +391,9 @@ export async function cancelAllVisitReminders(visits: readonly Visit[]): Promise
   key — the two-visits-same-date collision the data-model lens flagged cannot occur.
 - **Guards the past-time case** with an `if` before calling the scheduler (no `!`), and skips
   scheduling when the computed fire time is already past.
-- `cancelAllVisitReminders(visits)` cancels every per-visit ID and is called by the Settings
-  "clear all data" handler before `clearAllData` wipes the key.
+- `cancelAllVisitReminders(visits)` cancels every per-visit ID. No caller exists yet (there is
+  no full-wipe path today); it becomes the pre-wipe call whenever a "clear all data" handler is
+  built — see the forward obligation in Storage & guards.
 - `expo-notifications` stays **lazily imported** exactly as the existing functions do; the
   Expo-Go caveat (notifications unavailable there) applies unchanged, and the Android channel
   `'adhd-log-reminders'` is reused (no new channel, no new permission).
@@ -418,9 +403,10 @@ on delete).
 
 ## Test plan
 
-All logic lives in covered `lib/` modules (`storage`, `export`), keeping coverage at or above
-thresholds (lines/statements/functions 90, branches 85). Specs go in
-`lib/__tests__/storage.test.ts` and `lib/__tests__/export.test.ts`, importing
+All logic lives in covered `lib/` modules (`storage` for visit parse/persistence and
+`sinceLastVisitRange`; `backup` for the round-trip; `report-html` for the rendered section),
+keeping coverage at or above thresholds (lines/statements/functions 90, branches 85). Specs go
+in `lib/__tests__/storage.test.ts`, `backup.test.ts`, and `report-html.test.ts`, importing
 `{ describe, it, expect }` from `vitest`, narrowing `Parsed<T>` / `ReportRange` inside the test
 rather than asserting. Fixtures use the sanctioned `as IsoDate` literal idiom.
 
@@ -458,16 +444,23 @@ rather than asserting. Fixtures use the sanctioned `as IsoDate` literal idiom.
   });
   ```
 
-`export.test.ts`:
+`backup.test.ts`:
 
 - `buildBackup(profile, doses, entries, visits)` includes `visits`; `parseBackup` round-trips
   them.
 - `parseBackup` on a backup **without** a `visits` field ⇒ `visits: []`.
+
+`storage.test.ts` (restore):
+
 - `restoreBackup` **persists** visits: assert it produces a `saveVisits` write of the parsed
   value (mock the storage write), proving the restore flow — not just the pure parser — carries
   the field to disk.
-- `adherenceInRange`: counts only logged mornings; `{ takenDays, loggedMornings }` ignores
-  days with no morning check-in; all-taken and all-skipped edges.
+- Adherence over a since-visit range reuses the landed `adherenceInWindow` (no new helper to
+  test); this doc only needs a case asserting the "since last visit" range feeds the right rows
+  into it — logged mornings counted, no-morning days ignored, all-taken and all-skipped edges.
+
+`report-html.test.ts`:
+
 - `buildReportHtml` with a visit note containing `<`/`&` asserts the exact **escaped**
   substring appears.
 - `buildReportHtml` over a `since-visit` range produces the expected daily-log rows and the
@@ -500,8 +493,9 @@ rather than asserting. Fixtures use the sanctioned `as IsoDate` literal idiom.
 
 - **Extends the landed provider report (doc 06 — see `docs/DECISIONS.md`):** the "Since last
   visit" / "Since starting" preset is the headline consumer of `sinceLastVisitRange`, and the
-  **adherence summary line** is already partly served by doc 06's `computeAdherence` (reconcile
-  `adherenceInRange` with it). Whoever wires the preset owns the (net-new) preset selector, the
+  **adherence summary line** is already served by doc 06's `adherenceInWindow` /
+  `computeAdherence` — this doc adds no adherence helper, it just scopes those to the new range.
+  Whoever wires the preset owns the (net-new) preset selector, the
   label mapping (`anchor` → text), the "Visits in range" HTML block, and the adherence line
   placement. **The report must keep the default landing range unchanged** so the fast path (open
   Settings → export) gains no extra required selection step just because a new option exists.
@@ -550,10 +544,11 @@ rather than asserting. Fixtures use the sanctioned `as IsoDate` literal idiom.
   exists; the `null` return is removed (justified: a `Profile` always exists by the time a
   visit can be logged). Test plan replaces "empty ⇒ null" with "no past visit ⇒ start-anchored
   range."
-- **Must-fix (adherence confound):** applied. Added the pure, tested `adherenceInRange` helper
-  and an explicit requirement (Goals, Export/report, Dependencies) that the scoped report
-  surface a descriptive doses-taken line — counted against logged mornings so unlogged days
-  aren't misread as skipped doses.
+- **Must-fix (adherence confound):** applied by reuse, not a new helper. The scoped report
+  surfaces a descriptive doses-taken line via the landed doc 06 `adherenceInWindow` /
+  `computeAdherence` (an earlier draft's duplicate `adherenceInRange` was dropped once doc 06
+  shipped the identical count) — counted against logged mornings so unlogged days aren't misread
+  as skipped doses.
 - **Suggestions:** PGI-C global impression logged as a named follow-on; same-day-as-appointment
   check-in edge documented (visible in raw History, not summarized into a delta); severity/notes
   report gap flagged as a doc 06 dependency.
@@ -579,9 +574,10 @@ rather than asserting. Fixtures use the sanctioned `as IsoDate` literal idiom.
 
 ### Data-model / migration + privacy + scope — approve-with-changes
 
-- **Must-fix (`clearAllData`):** applied. `clearAllData` now purges `VISITS_KEY`, and the
-  Settings clear handler calls `cancelAllVisitReminders` before the wipe so no stale local
-  notification survives.
+- **Must-fix (full-wipe path):** recorded as a forward obligation rather than "applied" — there
+  is no `clearAllData` function or "clear all data" handler in the codebase to modify. The doc
+  now books the requirement (purge the visits key + call `cancelAllVisitReminders` before any
+  future wipe) instead of asserting a change to a function that does not exist.
 - **Must-fix (backup write-back):** applied. Restore now persists parsed visits via
   `saveVisits` (in `restoreBackup`, `lib/storage.ts`), with a test asserting the write (not just
   the pure parser).
