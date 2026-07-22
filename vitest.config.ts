@@ -19,6 +19,9 @@ export default defineConfig({
     include: ['lib/__tests__/**/*.test.ts'],
     coverage: {
       provider: 'v8',
+      // cobertura is added for GitHub's native code-coverage reporting (see ci.yml); the
+      // rest is vitest's own default set, made explicit so adding cobertura doesn't drop them.
+      reporter: ['text', 'html', 'clover', 'json', 'cobertura'],
       include: [
         'lib/types.ts',
         'lib/schema.ts',

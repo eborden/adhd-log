@@ -55,6 +55,27 @@ gh secret set ANDROID_KEY_PASSWORD
 
 iOS needs no secrets — the Simulator build is unsigned.
 
+## Code coverage
+
+The `check` job publishes coverage to GitHub's native [code coverage](https://docs.github.com/en/code-security/how-tos/maintain-quality-code/set-up-code-coverage)
+feature (GitHub Code Quality) via `actions/upload-code-coverage@v1`, reading
+`coverage/cobertura-coverage.xml` — produced by vitest's `cobertura` reporter, added
+alongside its existing `text`/`html`/`clover`/`json` reporters in `vitest.config.ts`. This
+needs the `code-quality: write` permission, granted at the `check` job level rather than
+workflow-wide (least privilege).
+
+It runs on both triggers: the push-to-`main` run establishes the baseline GitHub compares
+against, and the pull_request run is compared against it. A repository ruleset's
+`code_coverage` rule can then enforce a minimum coverage threshold on PRs using this data —
+see the note below on why that rule isn't currently active.
+
+> A `code_coverage` rule (minimum 90%) was previously part of the `main protection` ruleset
+> but had to be removed: nothing in the workflow published coverage anywhere GitHub could
+> read it, so the rule sat permanently unsatisfiable and blocked every merge. This section
+> documents the fix; re-adding the rule is tracked separately and should go through an
+> `evaluate`-mode ruleset first (reports pass/fail without blocking) before flipping to
+> `active`, given how disruptive an unsatisfiable required rule turned out to be last time.
+
 ## Caching
 
 Beyond npm, Gradle dependencies, and the CocoaPods spec cache, the build jobs port

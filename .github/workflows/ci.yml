@@ -21,6 +21,12 @@ jobs:
   # ---------------------------------------------------------------------------
   check:
     runs-on: ubuntu-latest
+    # code-quality:write lets the coverage-upload step below publish to GitHub's native
+    # coverage feature; pull-requests:read lets it look up the open PR for a main push.
+    permissions:
+      contents: read
+      code-quality: write
+      pull-requests: read
     outputs:
       fp: ${{ steps.fingerprint.outputs.fp }}
     steps:
@@ -38,6 +44,18 @@ jobs:
 
       - name: Quality gate
         run: npm run check
+
+      # Publishes coverage/cobertura-coverage.xml (from vitest.config.ts's `cobertura`
+      # reporter) to GitHub's native code-coverage feature, so a repository ruleset's
+      # code_coverage rule has real data to evaluate. Runs on both push-to-main (the
+      # baseline GitHub compares against) and pull_request (compared against that baseline).
+      - name: Upload code coverage
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-code-coverage@v1
+        with:
+          file: coverage/cobertura-coverage.xml
+          language: TypeScript
+          label: vitest
 
       # The @expo/fingerprint hash of the *native* inputs (same ignorePaths as
       # scripts/build-apk.mjs). Identical hash => native tree is byte-identical =>
