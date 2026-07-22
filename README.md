@@ -17,13 +17,13 @@ phone.
 
 ## Screenshots
 
-| Today                                       | Trends                                        |
-| ------------------------------------------- | --------------------------------------------- |
-| ![Today screen](docs/screenshots/today.png) | ![Trends screen](docs/screenshots/trends.png) |
+| Today                                       | Morning check-in                                         |
+| ------------------------------------------- | -------------------------------------------------------- |
+| ![Today screen](docs/screenshots/today.png) | ![Morning check-in screen](docs/screenshots/checkin.png) |
 
-| Provider report                                     | History                                         |
-| --------------------------------------------------- | ----------------------------------------------- |
-| ![Provider PDF report](docs/screenshots/report.png) | ![History screen](docs/screenshots/history.png) |
+| Trends                                        | Provider report                                     |
+| --------------------------------------------- | --------------------------------------------------- |
+| ![Trends screen](docs/screenshots/trends.png) | ![Provider PDF report](docs/screenshots/report.png) |
 
 ## What you track
 
