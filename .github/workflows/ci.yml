@@ -60,6 +60,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5
+        id: setup-node
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -80,13 +81,17 @@ jobs:
 
       # Fingerprint-gated native cache: on a hit, android/ (source + compiled .cxx/build/) is
       # restored intact and prebuild is skipped, so Gradle reuses the native compile (the
-      # ~50s warm path). On a miss we clean-prebuild + full compile, then save below.
+      # ~50s warm path). On a miss we clean-prebuild + full compile, then save below. The
+      # Node version is part of the key too — a generated native tree can bake an absolute
+      # path to the Node binary (see the iOS job), so a Node bump must force a fresh prebuild
+      # rather than silently reusing a tree built against a Node version that may no longer
+      # exist on the runner.
       - name: Restore native cache
         id: nativecache
         uses: actions/cache/restore@v5
         with:
           path: android
-          key: android-native-${{ runner.os }}-${{ needs.check.outputs.fp }}
+          key: android-native-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ needs.check.outputs.fp }}
 
       - name: Prebuild (Android)
         if: steps.nativecache.outputs.cache-hit != 'true'
@@ -122,7 +127,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: android
-          key: android-native-${{ runner.os }}-${{ needs.check.outputs.fp }}
+          key: android-native-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ needs.check.outputs.fp }}
 
       - uses: actions/upload-artifact@v6
         with:
@@ -141,6 +146,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5
+        id: setup-node
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -162,12 +168,16 @@ jobs:
             cocoapods-${{ runner.os }}-
 
       # Fingerprint-gated native cache (ios/ includes Pods/ and the ios/build DerivedData).
+      # The generated Xcode project bakes an *absolute* path to the Node binary used at
+      # prebuild/pod-install time (react-native-xcode.sh writes it via `.xcode.env.local`),
+      # so the Node version must be part of the key — restoring a tree built against a
+      # different Node version would point at a binary that no longer exists on the runner.
       - name: Restore native cache
         id: nativecache
         uses: actions/cache/restore@v5
         with:
           path: ios
-          key: ios-native-${{ runner.os }}-${{ needs.check.outputs.fp }}
+          key: ios-native-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ needs.check.outputs.fp }}
 
       - name: Prebuild (iOS)
         if: steps.nativecache.outputs.cache-hit != 'true'
@@ -205,7 +215,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ios
-          key: ios-native-${{ runner.os }}-${{ needs.check.outputs.fp }}
+          key: ios-native-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ needs.check.outputs.fp }}
 
       - uses: actions/upload-artifact@v6
         with:
