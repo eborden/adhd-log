@@ -5,7 +5,10 @@ what gets persisted.
 
 ## Entry points
 
-- [[app/(tabs)/index.tsx]] — Today tab; surfaces morning/evening session cards
+- [[app/(tabs)/index.tsx]] — Today tab; surfaces morning/evening session cards plus the
+  weekly-impression card (see [[docs/hubs/reminders-and-notifications.md]] and
+  [[docs/hubs/report-and-backup.md]] for that cadence's own map — it's a separate, non-daily
+  flow and deliberately doesn't touch the daily `Draft`/schema seams below)
 - [[app/checkin.tsx]] — the check-in screen itself (morning or evening)
 - [[app/entry/[date].tsx]] — view/edit a past day's entry
 
