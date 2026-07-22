@@ -14,6 +14,11 @@ most recent entry lands on today (preserving the fixture's original day-to-day s
 and writes the shifted `profile`/`doses`/`entries` straight into the keys the app's storage layer
 reads from on web.
 
+The date-shift/re-derivation logic is shared with `../shift-fixture-into-android` (same
+fixtures, different seeding target — that one writes into an Android emulator's AsyncStorage
+database via `adb` instead of a browser's `localStorage`) — see `../_shared/shift-fixture.mjs`
+for the actual transform and its rationale.
+
 ## Why the import button doesn't work on web
 
 Two separate silent failures compound:
@@ -43,21 +48,15 @@ spans 2026-01-05 → 2026-03-03). The Trends screen (`app/(tabs)/trends.tsx`) on
 gaps there — History and the PDF export still show the data (they aren't date-window-anchored),
 but Trends is the screen most worth exercising and it needs recent dates.
 
-**The shift must also move `profile.createdAt`, not just the entries.** `lib/export.ts`'s
-`coverage()` / `loggingStartDate()` floors the Trends "logged X of Y days" denominator at
-`profile.createdAt`. Fixtures freeze `createdAt` to their report-generation timestamp. If a shift
-only moves the entries and doses but leaves `createdAt` where it was, the coverage floor lands
-_after_ the shifted entries, Trends clips its window to almost nothing, and everything renders as
-a gap even though real data now exists in `localStorage`/History — the exact bug this skill exists
-to avoid. Always re-derive `createdAt` from the shifted `startDate`.
-
-**The seed also forces `profile.lockEnabled` to `false`, regardless of the fixture's own value.**
-Several fixtures (e.g. `titration-journey`, `short-week`) set `lockEnabled: true`. On web,
-`expo-local-authentication`'s `authenticateAsync()` isn't implemented — its web shim only stubs
-the hardware/enrollment-check functions — so `LockScreen`'s unlock attempt always throws and
-there's no bypass. Seeding a lock-enabled profile strands the tester on
-`This is private, on this device.` / `Couldn't verify — try again.` with no way forward short of
-clearing `localStorage` again. Confirmed by hitting this exact wall while building this skill.
+The shift also re-derives `profile.createdAt` from the shifted `startDate`, and forces
+`profile.lockEnabled` to `false` regardless of the fixture's own value — both load-bearing for
+_any_ seeding target, not web-specific, so the reasoning lives once in
+`../_shared/shift-fixture.mjs` rather than repeated here. The web-specific detail worth calling
+out: on web, `expo-local-authentication`'s `authenticateAsync()` isn't implemented — its web shim
+only stubs the hardware/enrollment-check functions — so `LockScreen`'s unlock attempt always
+throws and there's no bypass. Seeding a lock-enabled profile strands the tester on `This is
+private, on this device.` / `Couldn't verify — try again.` with no way forward short of clearing
+`localStorage` again. Confirmed by hitting this exact wall while building this skill.
 
 ## Workflow
 
@@ -77,13 +76,12 @@ chrome-devtools MCP tools.
    ```
 
    This prints a self-contained `() => { ... }` JS function with the fixture's `profile`/`doses`/
-   `entries` embedded as literals. It computes `today` from the browser's own `Date` (not this
-   shell's clock — avoids drift if a build straddles midnight), computes the single day-offset
-   needed to move the fixture's last entry onto that `today`, and applies that same offset to
-   every entry date/key, every dose date, `profile.startDate`, and `profile.createdAt` (re-derived
-   from the shifted `startDate`, per the "why" above). It also rewrites each entry's
-   `morning`/`evening.completedAt` to the shifted date (cosmetic — nothing in the app's date-range
-   logic reads `completedAt`, but it keeps the seeded data internally consistent).
+   `entries` embedded as literals, plus the shared `shiftFixture` transform
+   (`../_shared/shift-fixture.mjs`) spliced in via `.toString()` so it runs _inside the browser_.
+   The generated function computes `today` from the browser's own `Date` (not this shell's clock
+   — avoids drift if a build straddles midnight) and calls `shiftFixture(profile, doses, entries,
+today)`, which applies the day-offset to every entry date/key, every dose date,
+   `profile.startDate`, and `profile.createdAt`.
 
 3. **Run that function _in the browser page_, not in this shell** — the whole point is that
    `new Date()` inside it must be the browser's real clock. Preferred: the chrome-devtools MCP
