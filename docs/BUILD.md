@@ -86,11 +86,15 @@ changes on top of an existing tree and can leave stale files behind). Clean when
 changed, skip when they are byte-for-byte identical — and the fingerprint errs toward _more_
 cleaning, never less, so a mismatch can only cost an unnecessary rebuild, never a stale APK.
 
-> Not used, deliberately: Gradle's build cache (`org.gradle.caching`). Profiling showed the
-> two costs are the Metro bundle (not a Gradle task) and the cold CMake native compile (a
-> `.cxx` external-native build, not stored in Gradle's build cache). Neither is helped by it,
-> so enabling it would be noise. The daemon + `org.gradle.parallel=true` (already in the
-> generated `gradle.properties`) are the only Gradle knobs that matter here.
+> `npm run apk` passes `--build-cache` (Gradle's own task-output cache — Kotlin/Java compile,
+> resource merging, dexing, the Expo Gradle plugins' own jar build) unconditionally; it's
+> keyed by task input content hashes, so it's immune to the same mtime churn ccache sidesteps
+> below. Originally left off: profiling at the time found the two costs were the Metro
+> bundle (not a Gradle task) and the cold CMake native compile (not a cacheable Gradle task
+> output either), so it looked like pure noise. Once ccache (below) took the CMake compile
+> off the table, the next-largest cost turned out to be exactly the layer this _does_ cache —
+> see [`CI.md`](CI.md) for the measured before/after. The daemon + `org.gradle.parallel=true`
+> (already in the generated `gradle.properties`) are additional, unrelated Gradle knobs.
 
 > **ccache** (the cold CMake compile). If `ccache` is on your PATH (`brew install ccache`),
 > `npm run apk` routes the native compile through it via `gradle/ccache.init.gradle` — so a

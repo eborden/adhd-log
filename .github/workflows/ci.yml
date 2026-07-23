@@ -70,8 +70,9 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # Caches ~/.gradle deps + the Gradle distribution (download avoidance only — not the
-      # build cache, which docs/BUILD.md deliberately leaves off).
+      # Caches ~/.gradle deps + the Gradle distribution, and (since this action's default
+      # "enhanced" caching covers it) the local Gradle build cache at
+      # ~/.gradle/caches/build-cache-1 — see the --build-cache flag below and docs/CI.md.
       - uses: gradle/actions/setup-gradle@v5
 
       - name: Install dependencies
@@ -112,6 +113,10 @@ jobs:
       # ADHDLOG_* Gradle properties are present. ADHDLOG_CCACHE + the init script route every
       # module's CMake compile through ccache; COMPILERCHECK=content + BASEDIR/NOHASHDIR make
       # hits survive the NDK clang's absolute path and mtime varying across runners.
+      # --build-cache turns on Gradle's own task-output cache (Kotlin/Java compile, resource
+      # merging, dexing, the Expo Gradle plugins' own jar build, …) — the layer above the
+      # native compile that ccache doesn't reach. It's keyed by task input *content* hashes,
+      # same immunity to the npm-ci mtime churn that motivated ccache. See docs/CI.md.
       - name: Assemble release APK
         working-directory: android
         env:
@@ -124,6 +129,7 @@ jobs:
           CCACHE_NOHASHDIR: 'true'
         run: |
           ./gradlew :app:assembleRelease \
+            --build-cache \
             --init-script "$GITHUB_WORKSPACE/gradle/ccache.init.gradle" \
             -PADHDLOG_KEYSTORE_FILE="$GITHUB_WORKSPACE/credentials/adhd-log-release.jks" \
             -PADHDLOG_KEYSTORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD" \

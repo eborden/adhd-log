@@ -127,10 +127,14 @@ console.log('\nsteps:');
 if (needClean) {
   run('npx', ['expo', 'prebuild', '--platform', 'android', '--clean'], { env });
 }
-run('./gradlew', [':app:assembleRelease', ...(ccache?.initArgs ?? []), ...(signingFlags ?? [])], {
-  cwd: path.join(ROOT, 'android'),
-  env: ccache?.env ?? env,
-});
+run(
+  './gradlew',
+  [':app:assembleRelease', '--build-cache', ...(ccache?.initArgs ?? []), ...(signingFlags ?? [])],
+  {
+    cwd: path.join(ROOT, 'android'),
+    env: ccache?.env ?? env,
+  },
+);
 
 // Record the fingerprint only after a clean build actually reproduced these inputs, so a
 // failed build (execFileSync throws above) never poisons the baseline.

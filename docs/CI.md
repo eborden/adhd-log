@@ -91,6 +91,25 @@ runs unconditionally now (a few seconds); the compile it triggers lands as ccach
 > as the NDK clang's absolute path and mtime vary across runners. The Metro JS bundle is
 > still never cached and runs every build, so it can't ship stale JS.
 
+Measured on `main` (`Assemble release APK` step, real CI runs): cold (empty ccache) **10m56s**
+→ warm (ccache populated by the previous run) **5m20s**, with ccache reporting 192/192 hits.
+
+### Android — Gradle build cache (the layer above ccache)
+
+ccache only covers the native C/C++ compile. `--build-cache` on the `gradlew` invocation turns
+on Gradle's own task-output cache — Kotlin/Java compilation, resource merging, dexing, the
+Expo Gradle plugins' own jar build, and other cacheable tasks that ccache doesn't reach. Like
+ccache, it's keyed by task **input content hashes**, not file mtimes, so it's immune to the
+same `npm ci` timestamp churn that broke the old `android/`-tree cache. No separate cache
+step is needed: [`gradle/actions/setup-gradle@v5`](https://github.com/gradle/actions)'s
+default "enhanced" caching already persists `~/.gradle/caches/build-cache-1` (the local build
+cache) across runs, alongside the dependency/wrapper caches it was already saving.
+
+This was previously left off deliberately — profiling at the time found the two dominant
+costs were the Metro bundle (not a Gradle task) and the cold CMake compile (not a cacheable
+Gradle task output), so enabling it looked like pure noise. Once ccache took the CMake compile
+off the table, the next-largest cost turned out to be exactly the layer `--build-cache` caches.
+
 ### iOS — fingerprint-gated native-tree cache
 
 iOS still caches the whole `ios/` tree (Pods + DerivedData) keyed by the `@expo/fingerprint`
