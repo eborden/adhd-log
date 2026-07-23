@@ -92,6 +92,13 @@ cleaning, never less, so a mismatch can only cost an unnecessary rebuild, never 
 > so enabling it would be noise. The daemon + `org.gradle.parallel=true` (already in the
 > generated `gradle.properties`) are the only Gradle knobs that matter here.
 
+> **ccache** (the cold CMake compile). If `ccache` is on your PATH (`brew install ccache`),
+> `npm run apk` routes the native compile through it via `gradle/ccache.init.gradle` — so a
+> `--clean` rebuild recompiles the C++ from a content-addressed cache instead of from
+> scratch. It's a no-op when ccache isn't installed. This is the same mechanism CI uses
+> (there it's the _primary_ native cache, since CI can't rely on mtimes; see
+> [`CI.md`](CI.md)).
+
 The APK lands at `android/app/build/outputs/apk/release/app-release.apk`. The equivalent
 manual commands (if you're not using the script):
 

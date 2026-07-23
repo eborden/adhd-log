@@ -75,6 +75,22 @@ function resolveAndroidEnv() {
   return env;
 }
 
+// If ccache is installed, route the native compile through it (content-addressed, so it
+// survives a clean prebuild) via gradle/ccache.init.gradle. Absent → return null and the
+// build runs unchanged. Mirrors what CI does with hendrikmuhs/ccache-action. See docs/CI.md.
+const CCACHE_INIT = path.join(ROOT, 'gradle/ccache.init.gradle');
+function resolveCcache(env) {
+  try {
+    execFileSync('ccache', ['--version'], { stdio: 'ignore' });
+  } catch {
+    return null; // not installed / not on PATH
+  }
+  return {
+    initArgs: ['--init-script', CCACHE_INIT],
+    env: { ...env, ADHDLOG_CCACHE: 'ccache', CCACHE_COMPILERCHECK: 'content' },
+  };
+}
+
 const started = Date.now();
 
 const { hash } = await createFingerprintAsync(ROOT, { ignorePaths: IGNORE_PATHS });
@@ -101,14 +117,19 @@ if (!signingFlags) {
 }
 
 const env = resolveAndroidEnv();
+const ccache = resolveCcache(env);
+console.log(
+  'ccache             : ' +
+    (ccache ? 'on (content-addressed compiler cache)' : 'not installed — skipping'),
+);
 
 console.log('\nsteps:');
 if (needClean) {
   run('npx', ['expo', 'prebuild', '--platform', 'android', '--clean'], { env });
 }
-run('./gradlew', [':app:assembleRelease', ...(signingFlags ?? [])], {
+run('./gradlew', [':app:assembleRelease', ...(ccache?.initArgs ?? []), ...(signingFlags ?? [])], {
   cwd: path.join(ROOT, 'android'),
-  env,
+  env: ccache?.env ?? env,
 });
 
 // Record the fingerprint only after a clean build actually reproduced these inputs, so a
