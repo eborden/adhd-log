@@ -5,9 +5,9 @@ one number line so they never collide:
 
 - **Architecture / correctness (01–05)** — distilled from the architecture expert-panel review
   (2026-07-18). Fix confirmed data-loss paths and make the codebase's own contracts true.
-- **User-value / features (06–31)** — 06–16 distilled from the user-value analysis (2026-07-18);
+- **User-value / features (06–36)** — 06–16 distilled from the user-value analysis (2026-07-18);
   17–20 distilled from the titration-log research (2026-07-21, `docs/research/titration-log-examples.md`);
-  21 a clinical-lens alternative to #13; 22–31 two rounds of an innovation batch (2026-07-23)
+  21 a clinical-lens alternative to #13; 22–36 three rounds of an innovation batch (2026-07-23)
   pushing capability further while staying inside the collect → log → provider mission. Each run
   through the same 4-expert design-review panel (see "How the docs were produced").
 
@@ -63,14 +63,19 @@ Each doc references its source item in the user-value analysis.
 | 29  | [Unified titration timeline](29-titration-timeline.md)                       | P2       | One chronological strip interleaving dose changes, visits, and side-effect onsets — pure synthesis of existing data, no new storage; supersedes the per-metric dose-change dot                                          |
 | 30  | [Portal-message text digest](30-portal-message-digest.md)                    | P2       | A short, copyable plain-text summary (not the PDF) sized for a patient-portal message box, reusing the report's own pure helpers; one small new dependency (`expo-clipboard`)                                           |
 | 31  | [Planned medication pause log](31-medication-pause-log.md)                   | **P1**   | Distinguishes a planned dosing pause from unexplained non-adherence — corrects a real honesty gap in the landed adherence block; the one doc that edits already-shipped code, additively                                |
+| 32  | [Notes full-text search](32-notes-search.md)                                 | P2       | Case-insensitive substring search over free-text evening notes, gated behind a tap-to-expand affordance on History; pure legibility over data already collected, no new statistics                                      |
+| 33  | [QR-code portal digest](33-qr-digest.md)                                     | P3       | Renders doc 30's plain-text digest as a scannable QR code for in-person/kiosk intake scanners — a second presentation mode, zero new data; hard dependency on doc 30                                                    |
+| 34  | [Home-screen widget MVP](34-home-screen-widget.md)                           | P3       | Decision doc resolving doc 15's flagged-but-unbuilt widget stretch goal — a read-only morning/evening glance, tap-to-open; the largest-effort doc in the pending set (a second native build target per platform)        |
+| 35  | [Periodic backup reminder](35-backup-reminder.md)                            | P2       | A monthly, dismissible nudge to export a JSON backup, addressing the real data-loss risk `docs/PLANNING-v0.md`'s own Open Items already flags; also owns the Today-tab secondary-card ordering/cap convention           |
+| 36  | [Medication supply / refill countdown](36-supply-countdown.md)               | P2       | A private, patient-facing "~N doses left" logistics countdown from self-reported refill counts — deliberately kept off every provider-facing surface, no pharmacy integration                                           |
 
-### How the 06–31 docs were produced
+### How the 06–36 docs were produced
 
 Each was drafted against this repo's real symbols/seams, then reviewed by a 4-lens expert
 panel before landing here (17–20 followed the identical process on 2026-07-21, sourced from
-`docs/research/titration-log-examples.md`; 22–26 and 27–31 followed it again on 2026-07-23 as two
-rounds of an innovation batch, each with independently-spawned reviewers; all returned approve /
-approve-with-changes):
+`docs/research/titration-log-examples.md`; 22–26, 27–31, and 32–36 followed it again on
+2026-07-23 as three rounds of an innovation batch, each with independently-spawned reviewers;
+all returned approve / approve-with-changes):
 
 1. **Clinical / behavioral-health measurement** — is the captured data actually usable by a
    prescriber for non-stimulant titration, and does it stay descriptive (never advice)?
@@ -81,7 +86,7 @@ approve-with-changes):
    re-onboarding, migrate-on-read for changed shapes, 100% on-device, no scope creep into advice.
 
 Every doc ends with a **## Panel review** section recording each lens's verdict and what
-changed. All 06–31 came back `approve` / `approve-with-changes` (no rejects); must-fixes were
+changed. All 06–36 came back `approve` / `approve-with-changes` (no rejects); must-fixes were
 applied before commit.
 
 ## Ground rules that apply to every plan
