@@ -40,6 +40,12 @@ export const SIDE_EFFECTS = [
   'insomnia',
   'sweating',
   'racingHeart',
+  'vomiting',
+  'constipation',
+  'muscleTension',
+  'tremor',
+  'blurredVision',
+  'urinaryDifficulty',
   'other',
 ] as const;
 export type SideEffect = (typeof SIDE_EFFECTS)[number];
