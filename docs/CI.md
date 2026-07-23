@@ -13,7 +13,8 @@ machine, and no Expo/EAS account is involved (consistent with the local-only sta
 
 - **`check`** (ubuntu) — the same gate as local `npm run check` (typecheck, lint,
   format:check, test + coverage, type-coverage) plus computing the native fingerprint that
-  keys the iOS native-tree cache (Android now uses ccache instead — see [Caching](#caching)).
+  keys the CocoaPods spec/artifact cache (both native compiles are cached via ccache instead —
+  see [Caching](#caching)).
 - **`android`** (ubuntu) — signed release APK. Needs `check` green.
 - **`ios`** (macOS) — **unsigned iOS Simulator** `.app`. Needs `check` green.
 
@@ -110,14 +111,32 @@ costs were the Metro bundle (not a Gradle task) and the cold CMake compile (not 
 Gradle task output), so enabling it looked like pure noise. Once ccache took the CMake compile
 off the table, the next-largest cost turned out to be exactly the layer `--build-cache` caches.
 
-### iOS — fingerprint-gated native-tree cache
+### iOS — ccache, for the same reason as Android
 
-iOS still caches the whole `ios/` tree (Pods + DerivedData) keyed by the `@expo/fingerprint`
-hash: on a hit, `expo prebuild` is skipped and `xcodebuild` reuses DerivedData; on a miss, a
-clean prebuild + full compile runs and populates the cache. The key folds in the resolved
-Node version (`ios-native-…-node<version>-<fp>`) because CocoaPods bakes an **absolute path**
-to the Node binary into the generated project (`.xcode.env.local`), so a tree built under a
-different Node version would point at a binary that no longer exists on the runner — bumping
-`.nvmrc` forces a fresh prebuild. (iOS doesn't hit the Android mtime problem the same way:
-`xcodebuild`'s DerivedData reuse is keyed on its own hashes, not raw source mtimes. Migrating
-iOS to ccache too is a possible follow-up.)
+**Correction to an earlier version of this doc**, which claimed iOS's fingerprint-gated
+`ios/`-tree cache (Pods + DerivedData) didn't hit the Android mtime problem, on the theory
+that `xcodebuild`'s DerivedData reuse is keyed on its own hashes rather than raw source
+mtimes. A CI log check disproved that: on a run where `Restore native cache` reported a hit
+and `Prebuild (iOS)` was correctly skipped, `Build for iOS Simulator` still recompiled **every
+single Pod from source** (~350 `CompileC`/`SwiftCompile` invocations across all ~25
+Expo/RN modules) — a reported cache hit bought nothing.
+
+The likely cause is the same shape as Android's bug: RN/Expo native modules are consumed as
+CocoaPods `:path` pods pointing at `node_modules/`, so the actual `.mm`/`.cpp` files Xcode
+compiles live in `node_modules/` rather than inside the cached `ios/` tree. `npm ci` runs
+_before_ `Restore native cache` in this job — same ordering as Android had — and restamps
+`node_modules` with fresh mtimes right before the (mtime-consistent, but now stale-relative-
+to-source) DerivedData gets restored, so Xcode's incremental build sees every input as
+"changed" and recompiles.
+
+The fix mirrors Android exactly: [`hendrikmuhs/ccache-action`](https://github.com/hendrikmuhs/ccache-action)
+(macOS-supported) plus `USE_CCACHE=1`. Unlike Android, this needs **no custom init script or
+config plugin** — RN's own `react_native_pods.rb` already reads
+`ccache_enabled: ENV['USE_CCACHE'] == '1'` and points `CC`/`CXX`/`LD`/`LDPLUSPLUS` at
+ccache-wrapping scripts it ships (`scripts/xcode/ccache-clang.sh`) during `pod install`, which
+runs inside `expo prebuild`. `Prebuild (iOS)` now runs unconditionally (previously gated on
+the tree-cache hit) so that wiring is always freshly baked in, matching Android's "drift-free
+by construction" reasoning; the old `ios/`-tree cache is removed since it's redundant once
+prebuild always runs `--clean` anyway, and wasn't earning its keep regardless (see above).
+The CocoaPods spec/artifact cache (`~/Library/Caches/CocoaPods`) is unrelated to this and
+stays — it isn't compiled output, so it doesn't have the mtime problem.
