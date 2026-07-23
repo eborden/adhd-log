@@ -79,22 +79,23 @@ jobs:
         env:
           HUSKY: 0
 
-      # Fingerprint-gated native cache: on a hit, android/ (source + compiled .cxx/build/) is
-      # restored intact and prebuild is skipped, so Gradle reuses the native compile (the
-      # ~50s warm path). On a miss we clean-prebuild + full compile, then save below. The
-      # Node version is part of the key too — a generated native tree can bake an absolute
-      # path to the Node binary (see the iOS job), so a Node bump must force a fresh prebuild
-      # rather than silently reusing a tree built against a Node version that may no longer
-      # exist on the runner.
-      - name: Restore native cache
-        id: nativecache
-        uses: actions/cache/restore@v5
+      # Content-addressed compiler cache for the native C++ compile. This replaces the old
+      # fingerprint-gated cache of the whole android/ tree, which preserved compiled outputs
+      # keyed by mtime — and `npm ci` above restamps node_modules *after* any tree restore,
+      # so ninja treated every object as stale and recompiled regardless. ccache keys on
+      # preprocessed source content instead, so the mtime churn is irrelevant and the compile
+      # collapses into cache hits. The launcher wiring lives in gradle/ccache.init.gradle;
+      # see docs/CI.md. The action installs ccache, restores ~/.ccache, and saves it post-job.
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1
         with:
-          path: android
-          key: android-native-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ needs.check.outputs.fp }}
+          key: ${{ runner.os }}-android-ccache
+          max-size: 1G
 
+      # No fingerprint gate anymore: prebuild is cheap (a few seconds) and always running it
+      # keeps the tree drift-free by construction. The expensive part — the C++ compile —
+      # is handled by ccache above rather than by preserving the android/ build tree.
       - name: Prebuild (Android)
-        if: steps.nativecache.outputs.cache-hit != 'true'
         run: npx expo prebuild --platform android --clean
 
       # credentials/ is gitignored, so the keystore never lives in the repo — it is
@@ -108,26 +109,26 @@ jobs:
 
       # Mirrors docs/BUILD.md's manual sequence (minus `adb install`). The release
       # signingConfig injected by plugins/withReleaseSigning.ts activates only when these
-      # ADHDLOG_* Gradle properties are present.
+      # ADHDLOG_* Gradle properties are present. ADHDLOG_CCACHE + the init script route every
+      # module's CMake compile through ccache; COMPILERCHECK=content + BASEDIR/NOHASHDIR make
+      # hits survive the NDK clang's absolute path and mtime varying across runners.
       - name: Assemble release APK
         working-directory: android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ADHDLOG_CCACHE: ccache
+          CCACHE_COMPILERCHECK: content
+          CCACHE_BASEDIR: ${{ github.workspace }}
+          CCACHE_NOHASHDIR: 'true'
         run: |
           ./gradlew :app:assembleRelease \
+            --init-script "$GITHUB_WORKSPACE/gradle/ccache.init.gradle" \
             -PADHDLOG_KEYSTORE_FILE="$GITHUB_WORKSPACE/credentials/adhd-log-release.jks" \
             -PADHDLOG_KEYSTORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD" \
             -PADHDLOG_KEY_ALIAS="$ANDROID_KEY_ALIAS" \
             -PADHDLOG_KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
-
-      - name: Save native cache
-        if: steps.nativecache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: android
-          key: android-native-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ needs.check.outputs.fp }}
 
       - uses: actions/upload-artifact@v6
         with:

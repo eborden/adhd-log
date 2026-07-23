@@ -1,0 +1,45 @@
+// Route every Android module's C/C++ (CMake) compile through ccache, a *content*-addressed
+// compiler cache. Passed to Gradle via `--init-script`, so it applies to every subproject
+// without editing the generated (gitignored) android/ tree and without anchoring to any
+// RN/Expo template text.
+//
+// Opt-in via the ADHDLOG_CCACHE env var — set it to "1"/"true" (resolves ccache on PATH) or
+// to an absolute path to the ccache binary. When unset — e.g. a machine without ccache
+// installed — this init script is a no-op and the build is byte-for-byte unchanged. CI sets
+// it after installing ccache; scripts/build-apk.mjs sets it when ccache is found on PATH.
+//
+// Why an init script and not a config plugin (cf. plugins/withReleaseSigning.ts): RN 0.86's
+// app build.gradle has no externalNativeBuild block to anchor a text edit to, and the C++
+// compile is spread across the RN Gradle plugin and each native module (expo-modules-core,
+// react-native-screens, …). Appending CMake arguments to every Android module's defaultConfig
+// from here reaches all of them generically — AGP concatenates these onto whatever each
+// module already sets.
+//
+// Why ccache and not the previous whole-android/-tree cache: that cache preserved compiled
+// outputs and depended on file mtimes surviving the cache round-trip. In CI, `npm ci`
+// restamps node_modules *after* the tree is restored, so ninja saw "sources newer than
+// objects" and recompiled everything regardless of the cache hit. ccache keys on preprocessed
+// source *content* (CCACHE_COMPILERCHECK=content extends that to the compiler binary), so
+// mtime churn is irrelevant and a "full rebuild" collapses into cache hits. See docs/CI.md.
+
+def ccacheBin = System.getenv('ADHDLOG_CCACHE')
+if (ccacheBin) {
+    if (ccacheBin == '1' || ccacheBin == 'true') {
+        ccacheBin = 'ccache'
+    }
+
+    def applyCcache = { project ->
+        project.android.defaultConfig.externalNativeBuild.cmake.arguments(
+            ('-DCMAKE_C_COMPILER_LAUNCHER=' + ccacheBin).toString(),
+            ('-DCMAKE_CXX_COMPILER_LAUNCHER=' + ccacheBin).toString(),
+        )
+    }
+
+    // withId defers until the plugin is actually applied, so a pure-Java/Kotlin module (no
+    // Android extension) is never touched. Modules without any CMake build silently ignore
+    // the extra arguments.
+    gradle.allprojects { project ->
+        project.plugins.withId('com.android.application') { applyCcache(project) }
+        project.plugins.withId('com.android.library') { applyCcache(project) }
+    }
+}

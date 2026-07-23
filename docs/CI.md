@@ -12,8 +12,8 @@ machine, and no Expo/EAS account is involved (consistent with the local-only sta
 | Push to `main` | ✅ runs | ✅ runs   | ✅ runs   |
 
 - **`check`** (ubuntu) — the same gate as local `npm run check` (typecheck, lint,
-  format:check, test + coverage, type-coverage) plus computing the native fingerprint used as
-  the build caches' key.
+  format:check, test + coverage, type-coverage) plus computing the native fingerprint that
+  keys the iOS native-tree cache (Android now uses ccache instead — see [Caching](#caching)).
 - **`android`** (ubuntu) — signed release APK. Needs `check` green.
 - **`ios`** (macOS) — **unsigned iOS Simulator** `.app`. Needs `check` green.
 
@@ -67,18 +67,38 @@ iOS needs no secrets — the Simulator build is unsigned.
 
 ## Caching
 
-Beyond npm, Gradle dependencies, and the CocoaPods spec cache, the build jobs port
-`build-apk.mjs`'s fingerprint gate to CI: the `@expo/fingerprint` hash of the native inputs
-keys a cache of the whole `android/` / `ios/` tree. On a hit, `expo prebuild` is skipped and
-the compiled native output is reused (the ~50s warm path); on a miss, a clean prebuild + full
-compile runs and then populates the cache. A matching fingerprint means the native inputs are
-byte-identical, so the cache is valid by the same argument the local gate relies on — a
-mismatch only ever costs a rebuild, never a stale artifact. The Metro JS bundle is never
-cached and runs every build, so it can't ship stale JS.
+Beyond npm, Gradle dependencies, and the CocoaPods spec cache:
 
-The cache key also folds in the resolved Node version (`android-native-…-node<version>-<fp>`,
-same for `ios-native-…`). `expo prebuild`/CocoaPods bakes an **absolute path** to the Node
-binary into the generated project (`.xcode.env.local` on iOS in particular), so restoring a
-tree built under a different Node version would point at a binary that no longer exists on
-the runner. Bumping `.nvmrc` therefore forces a fresh prebuild on both platforms rather than
-silently reusing a native tree wired to a stale Node path.
+### Android — ccache (compiler cache), not a native-tree cache
+
+The native C++ compile (RN/Hermes/folly/turbo-modules, ×4 ABIs) is the tall pole in the
+Android build. It is cached with [`hendrikmuhs/ccache-action`](https://github.com/hendrikmuhs/ccache-action),
+a **content-addressed** compiler cache: ccache hashes each translation unit's preprocessed
+source + flags and returns the cached object on a match, so a cache hit is independent of
+file timestamps. The launcher wiring lives in [`gradle/ccache.init.gradle`](../gradle/ccache.init.gradle)
+(`CMAKE_C/CXX_COMPILER_LAUNCHER=ccache`), passed to Gradle via `--init-script` so it reaches
+every native module without editing the regenerated `android/` tree. `expo prebuild --clean`
+runs unconditionally now (a few seconds); the compile it triggers lands as ccache hits.
+
+> **Why not cache the `android/` build tree** (the previous approach)? That cache preserved
+> compiled outputs keyed by `@expo/fingerprint` and relied on file **mtimes** surviving the
+> cache round-trip. But `npm ci` runs on every job and restamps `node_modules` _after_ the
+> tree is restored, so ninja saw "sources newer than objects" and recompiled the entire
+> native layer regardless of the cache hit — the advertised "~50s warm path" never
+> materialised in CI (only locally, where `node_modules` isn't reinstalled per build).
+> ccache sidesteps the whole mtime problem: it keys on source _content_, and
+> `CCACHE_COMPILERCHECK=content` + `CCACHE_BASEDIR`/`CCACHE_NOHASHDIR` keep hits stable even
+> as the NDK clang's absolute path and mtime vary across runners. The Metro JS bundle is
+> still never cached and runs every build, so it can't ship stale JS.
+
+### iOS — fingerprint-gated native-tree cache
+
+iOS still caches the whole `ios/` tree (Pods + DerivedData) keyed by the `@expo/fingerprint`
+hash: on a hit, `expo prebuild` is skipped and `xcodebuild` reuses DerivedData; on a miss, a
+clean prebuild + full compile runs and populates the cache. The key folds in the resolved
+Node version (`ios-native-…-node<version>-<fp>`) because CocoaPods bakes an **absolute path**
+to the Node binary into the generated project (`.xcode.env.local`), so a tree built under a
+different Node version would point at a binary that no longer exists on the runner — bumping
+`.nvmrc` forces a fresh prebuild. (iOS doesn't hit the Android mtime problem the same way:
+`xcodebuild`'s DerivedData reuse is keyed on its own hashes, not raw source mtimes. Migrating
+iOS to ccache too is a possible follow-up.)
