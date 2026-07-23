@@ -5,9 +5,9 @@ one number line so they never collide:
 
 - **Architecture / correctness (01–05)** — distilled from the architecture expert-panel review
   (2026-07-18). Fix confirmed data-loss paths and make the codebase's own contracts true.
-- **User-value / features (06–36)** — 06–16 distilled from the user-value analysis (2026-07-18);
+- **User-value / features (06–41)** — 06–16 distilled from the user-value analysis (2026-07-18);
   17–20 distilled from the titration-log research (2026-07-21, `docs/research/titration-log-examples.md`);
-  21 a clinical-lens alternative to #13; 22–36 three rounds of an innovation batch (2026-07-23)
+  21 a clinical-lens alternative to #13; 22–41 four rounds of an innovation batch (2026-07-23)
   pushing capability further while staying inside the collect → log → provider mission. Each run
   through the same 4-expert design-review panel (see "How the docs were produced").
 
@@ -68,14 +68,18 @@ Each doc references its source item in the user-value analysis.
 | 34  | [Home-screen widget MVP](34-home-screen-widget.md)                           | P3       | Decision doc resolving doc 15's flagged-but-unbuilt widget stretch goal — a read-only morning/evening glance, tap-to-open; the largest-effort doc in the pending set (a second native build target per platform)        |
 | 35  | [Periodic backup reminder](35-backup-reminder.md)                            | P2       | A monthly, dismissible nudge to export a JSON backup, addressing the real data-loss risk `docs/PLANNING-v0.md`'s own Open Items already flags; also owns the Today-tab secondary-card ordering/cap convention           |
 | 36  | [Medication supply / refill countdown](36-supply-countdown.md)               | P2       | A private, patient-facing "~N doses left" logistics countdown from self-reported refill counts — deliberately kept off every provider-facing surface, no pharmacy integration                                           |
+| 37  | [Confounder-tag day marker](37-context-tag-comparison.md)                    | P2       | A monochrome Trends marker for days carrying a doc-07 context tag — narrowed from an earlier draft's mean comparison after clinical review flagged a correlation-shaped claim                                           |
+| 38  | [OCR prescription-label dose capture](38-ocr-dose-capture.md)                | P3       | Decision doc: camera+on-device-OCR prefill for a dose change, with mandatory affirmative confirmation before Save can commit an OCR-derived value — recommends deferral pending demonstrated need                       |
+| 39  | [Local-network device-to-device sync](39-local-sync.md)                      | P3       | Decision doc: one-shot, local-Wi-Fi-only backup transfer between a user's own devices, no cloud relay — the first doc to add inbound networking; recommends building only if manual export/import proves insufficient   |
+| 40  | [Hours-since-dose moment annotation](40-hours-since-dose-pattern.md)         | P2       | Per-moment elapsed-time-since-dose fact (never aggregated) — reworked from an earlier bucketed-mean design the clinical lens rejected as self-selection-biased and pharmacodynamically misleading for this med class    |
+| 41  | [Streak grace period](41-streak-grace-period.md)                             | P2       | An opt-in "forgive one miss per week" streak variant, motivated by doc 34's own flagged streak-pressure concern — clinically confirmed to resolve the guilt-on-break harm only, not the logging-honesty-bias harm       |
 
-### How the 06–36 docs were produced
+### How the 06–41 docs were produced
 
 Each was drafted against this repo's real symbols/seams, then reviewed by a 4-lens expert
 panel before landing here (17–20 followed the identical process on 2026-07-21, sourced from
-`docs/research/titration-log-examples.md`; 22–26, 27–31, and 32–36 followed it again on
-2026-07-23 as three rounds of an innovation batch, each with independently-spawned reviewers;
-all returned approve / approve-with-changes):
+`docs/research/titration-log-examples.md`; 22–26, 27–31, 32–36, and 37–41 followed it again on
+2026-07-23 as four rounds of an innovation batch, each with independently-spawned reviewers):
 
 1. **Clinical / behavioral-health measurement** — is the captured data actually usable by a
    prescriber for non-stimulant titration, and does it stay descriptive (never advice)?
@@ -86,8 +90,17 @@ all returned approve / approve-with-changes):
    re-onboarding, migrate-on-read for changed shapes, 100% on-device, no scope creep into advice.
 
 Every doc ends with a **## Panel review** section recording each lens's verdict and what
-changed. All 06–36 came back `approve` / `approve-with-changes` (no rejects); must-fixes were
-applied before commit.
+changed. Rounds 1–3 (22–36) came back `approve` / `approve-with-changes` on every doc (no
+rejects). Round 4 (37–41) is the first to include a genuine **reject**: doc 40's original
+bucketed-mean design was rejected by the clinical lens (self-selection bias in the underlying
+sample, and an intraday dose-response framing this app's own non-stimulant premise doesn't
+support) and was substantially reworked into a narrower per-moment annotation rather than
+patched with copy — the doc now stands at approve/approve-with-changes on that reworked design.
+Doc 37's original mean-comparison was independently narrowed for a related reason before it
+reached reject. Round 4's Mobile UX / friction lens did not deliver findings for any of the five
+docs despite repeated re-requests (a recurring cross-round pattern, tracked in this project's
+memory as `feedback-panel-review-agents-stall`) — each doc's own Panel review section states
+this explicitly rather than fabricating a UX verdict.
 
 ## Ground rules that apply to every plan
 
