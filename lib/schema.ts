@@ -107,6 +107,12 @@ export const SIDE_EFFECT_LABELS: Readonly<Record<SideEffect, string>> = {
   insomnia: 'Insomnia',
   sweating: 'Sweating',
   racingHeart: 'Racing heart',
+  vomiting: 'Vomiting',
+  constipation: 'Constipation',
+  muscleTension: 'Muscle tension',
+  tremor: 'Tremor / jitters',
+  blurredVision: 'Blurred vision',
+  urinaryDifficulty: 'Trouble urinating',
   other: 'Other',
 };
 

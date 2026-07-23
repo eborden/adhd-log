@@ -19,8 +19,8 @@ describe('MINUTES', () => {
 });
 
 describe('SIDE_EFFECTS', () => {
-  it('lists the nine tracked side effects', () => {
-    expect(SIDE_EFFECTS).toHaveLength(9);
+  it('lists the fifteen tracked side effects', () => {
+    expect(SIDE_EFFECTS).toHaveLength(15);
     expect(SIDE_EFFECTS).toContain('nausea');
     expect(SIDE_EFFECTS).toContain('other');
   });
