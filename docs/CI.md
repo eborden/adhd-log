@@ -140,3 +140,20 @@ by construction" reasoning; the old `ios/`-tree cache is removed since it's redu
 prebuild always runs `--clean` anyway, and wasn't earning its keep regardless (see above).
 The CocoaPods spec/artifact cache (`~/Library/Caches/CocoaPods`) is unrelated to this and
 stays — it isn't compiled output, so it doesn't have the mtime problem.
+
+> **A second gotcha, found on the first real run**: `USE_CCACHE=1`/`CCACHE_*` set as plain
+> shell `env:` on the `xcodebuild` step never reach the actual compiler. `xcodebuild` doesn't
+> forward the calling shell's environment into each compiler subprocess — only genuine Xcode
+> build settings (confirmed from that run's log: `CC`/`CCACHE_BINARY`, which `pod install`
+> wrote into the project as build settings, showed up in the per-file compile environment;
+> plain env vars did not, and ccache reported **zero** cacheable calls despite ~350 real
+> compiles happening — a wasted cold build, not a cache hit). Worse, RN's `ccache-clang.sh`
+> wrapper unconditionally points `CCACHE_CONFIGPATH` at its own bundled conf (which has no
+> `cache_dir`) unless the caller already set it — silently discarding the persistent
+> `cache_dir` `hendrikmuhs/ccache-action` configures, and sending every compile to ccache's
+> untracked default directory instead. The fix: generate one ccache config file with every
+> setting ccache needs (`cache_dir` read back from `ccache --get-config=cache_dir`,
+> `compiler_check`, `base_dir`, `hash_dir`, plus RN's recommended `sloppiness`), and pass its
+> path as the `CCACHE_CONFIGPATH` **build setting** on the `xcodebuild` command line — the
+> same mechanism `CODE_SIGNING_ALLOWED=NO` already uses on that line — so it actually reaches
+> the compiler.

@@ -202,14 +202,31 @@ jobs:
 
       # Discover the generated workspace + scheme (names derive from expo.name; don't
       # hardcode). Unsigned Release build for the simulator.
+      #
+      # xcodebuild does NOT forward the calling shell's environment into each compiler
+      # subprocess — only actual Xcode build settings (confirmed from a CI log: CC and
+      # CCACHE_BINARY, both build settings the pod-install Ruby wired in, showed up in the
+      # per-file compile environment; a plain `env:` CCACHE_COMPILERCHECK/CCACHE_BASEDIR/
+      # CCACHE_DIR did not, and never reached ccache at all). Worse, RN's ccache-clang.sh
+      # wrapper unconditionally sets CCACHE_CONFIGPATH to its own bundled conf (no cache_dir)
+      # *unless* it's already set — silently overriding the ccache-action's persisted
+      # cache_dir and sending every compile to ccache's untracked, un-cached-by-CI default
+      # directory. So every setting ccache needs goes into one file, passed in as the
+      # CCACHE_CONFIGPATH *build setting* (not env) so it actually reaches the compiler.
       - name: Build for iOS Simulator
-        env:
-          USE_CCACHE: '1'
-          CCACHE_COMPILERCHECK: content
-          CCACHE_BASEDIR: ${{ github.workspace }}
-          CCACHE_NOHASHDIR: 'true'
         run: |
           shopt -s nullglob
+          CCACHE_CONF="$RUNNER_TEMP/ccache-ios.conf"
+          printf '%s\n' \
+            "cache_dir = $(ccache --get-config=cache_dir)" \
+            "compiler_check = content" \
+            "base_dir = $GITHUB_WORKSPACE" \
+            "hash_dir = false" \
+            "sloppiness = clang_index_store,file_stat_matches,include_file_ctime,include_file_mtime,ivfsoverlay,pch_defines,modules,system_headers,time_macros" \
+            "file_clone = true" \
+            "depend_mode = true" \
+            "inode_cache = true" \
+            > "$CCACHE_CONF"
           workspaces=(ios/*.xcworkspace)
           WORKSPACE="${workspaces[0]}"
           SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json | node -e "let s='';process.stdin.on('data',d=>(s+=d)).on('end',()=>console.log(JSON.parse(s).workspace.schemes[0]))")
@@ -221,6 +238,7 @@ jobs:
             -sdk iphonesimulator \
             -derivedDataPath ios/build \
             CODE_SIGNING_ALLOWED=NO \
+            CCACHE_CONFIGPATH="$CCACHE_CONF" \
             build
 
       - name: Package .app
