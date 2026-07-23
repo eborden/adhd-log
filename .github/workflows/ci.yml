@@ -163,9 +163,7 @@ jobs:
         env:
           HUSKY: 0
 
-      # CocoaPods spec + downloaded-artifact cache (registry specs, and the prebuilt
-      # xcframeworks CocoaPods downloads for React-Core-prebuilt/ReactNativeDependencies) —
-      # independent of the native-tree cache removed below, so it stays.
+      # CocoaPods spec cache — speeds `pod install` on a native-cache miss.
       - name: Cache CocoaPods specs
         uses: actions/cache@v5
         with:
@@ -176,57 +174,29 @@ jobs:
           restore-keys: |
             cocoapods-${{ runner.os }}-
 
-      # Content-addressed compiler cache for the native Objective-C++/C++ compile — same
-      # mechanism and rationale as the Android job (see ci.yml's android job and docs/CI.md).
-      # RN ships first-class support for this: react_native_pods.rb reads USE_CCACHE=1 and
-      # points CC/CXX/LD/LDPLUSPLUS at ccache-wrapping scripts during `pod install`, so no
-      # Podfile edit is needed — just the env var, set below on the steps that invoke it.
-      - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1
+      # Fingerprint-gated native cache (ios/ includes Pods/ and the ios/build DerivedData).
+      # The generated Xcode project bakes an *absolute* path to the Node binary used at
+      # prebuild/pod-install time (react-native-xcode.sh writes it via `.xcode.env.local`),
+      # so the Node version must be part of the key — restoring a tree built against a
+      # different Node version would point at a binary that no longer exists on the runner.
+      - name: Restore native cache
+        id: nativecache
+        uses: actions/cache/restore@v5
         with:
-          key: ${{ runner.os }}-ios-ccache
-          max-size: 1G
+          path: ios
+          key: ios-native-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ needs.check.outputs.fp }}
 
-      # No fingerprint gate: prebuild is what bakes the ccache CC/CXX build settings into the
-      # generated Xcode project via `pod install`, so it must run every time to guarantee that
-      # wiring is fresh — matching the Android job's reasoning. This also means the old
-      # ios/-tree cache below it (Pods/ + DerivedData) is redundant: `--clean` wipes it
-      # immediately, and Pod source files are consumed via `:path` from node_modules, so even
-      # when it WAS being restored, DerivedData's reuse was already defeated by the same
-      # npm-ci-restamps-node_modules-before-restore mtime problem the Android tree cache had
-      # (confirmed from a CI log: every single Pod recompiled despite a reported cache hit).
       - name: Prebuild (iOS)
-        env:
-          USE_CCACHE: '1'
+        if: steps.nativecache.outputs.cache-hit != 'true'
         run: npx expo prebuild --platform ios --clean
 
       # Discover the generated workspace + scheme (names derive from expo.name; don't
-      # hardcode). Unsigned Release build for the simulator.
-      #
-      # xcodebuild does NOT forward the calling shell's environment into each compiler
-      # subprocess — only actual Xcode build settings (confirmed from a CI log: CC and
-      # CCACHE_BINARY, both build settings the pod-install Ruby wired in, showed up in the
-      # per-file compile environment; a plain `env:` CCACHE_COMPILERCHECK/CCACHE_BASEDIR/
-      # CCACHE_DIR did not, and never reached ccache at all). Worse, RN's ccache-clang.sh
-      # wrapper unconditionally sets CCACHE_CONFIGPATH to its own bundled conf (no cache_dir)
-      # *unless* it's already set — silently overriding the ccache-action's persisted
-      # cache_dir and sending every compile to ccache's untracked, un-cached-by-CI default
-      # directory. So every setting ccache needs goes into one file, passed in as the
-      # CCACHE_CONFIGPATH *build setting* (not env) so it actually reaches the compiler.
+      # hardcode). Unsigned Release build for the simulator. DerivedData lives in ios/build
+      # (inside the cached tree above), but a cache hit doesn't skip the actual compile — see
+      # docs/CI.md's iOS caching section for why (and why ccache isn't the fix here either).
       - name: Build for iOS Simulator
         run: |
           shopt -s nullglob
-          CCACHE_CONF="$RUNNER_TEMP/ccache-ios.conf"
-          printf '%s\n' \
-            "cache_dir = $(ccache --get-config=cache_dir)" \
-            "compiler_check = content" \
-            "base_dir = $GITHUB_WORKSPACE" \
-            "hash_dir = false" \
-            "sloppiness = clang_index_store,file_stat_matches,include_file_ctime,include_file_mtime,ivfsoverlay,pch_defines,modules,system_headers,time_macros" \
-            "file_clone = true" \
-            "depend_mode = true" \
-            "inode_cache = true" \
-            > "$CCACHE_CONF"
           workspaces=(ios/*.xcworkspace)
           WORKSPACE="${workspaces[0]}"
           SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json | node -e "let s='';process.stdin.on('data',d=>(s+=d)).on('end',()=>console.log(JSON.parse(s).workspace.schemes[0]))")
@@ -238,7 +208,6 @@ jobs:
             -sdk iphonesimulator \
             -derivedDataPath ios/build \
             CODE_SIGNING_ALLOWED=NO \
-            CCACHE_CONFIGPATH="$CCACHE_CONF" \
             build
 
       - name: Package .app
@@ -248,6 +217,13 @@ jobs:
           APP="${apps[0]}"
           echo "Packaging $APP"
           ditto -c -k --keepParent "$APP" adhd-log-sim.app.zip
+
+      - name: Save native cache
+        if: steps.nativecache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ios
+          key: ios-native-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-${{ needs.check.outputs.fp }}
 
       - uses: actions/upload-artifact@v6
         with:

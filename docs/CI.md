@@ -13,8 +13,7 @@ machine, and no Expo/EAS account is involved (consistent with the local-only sta
 
 - **`check`** (ubuntu) — the same gate as local `npm run check` (typecheck, lint,
   format:check, test + coverage, type-coverage) plus computing the native fingerprint that
-  keys the CocoaPods spec/artifact cache (both native compiles are cached via ccache instead —
-  see [Caching](#caching)).
+  keys the iOS native-tree cache (Android now uses ccache instead — see [Caching](#caching)).
 - **`android`** (ubuntu) — signed release APK. Needs `check` green.
 - **`ios`** (macOS) — **unsigned iOS Simulator** `.app`. Needs `check` green.
 
@@ -111,49 +110,38 @@ costs were the Metro bundle (not a Gradle task) and the cold CMake compile (not 
 Gradle task output), so enabling it looked like pure noise. Once ccache took the CMake compile
 off the table, the next-largest cost turned out to be exactly the layer `--build-cache` caches.
 
-### iOS — ccache, for the same reason as Android
+### iOS — fingerprint-gated native-tree cache (does not speed up the compile)
 
-**Correction to an earlier version of this doc**, which claimed iOS's fingerprint-gated
-`ios/`-tree cache (Pods + DerivedData) didn't hit the Android mtime problem, on the theory
-that `xcodebuild`'s DerivedData reuse is keyed on its own hashes rather than raw source
-mtimes. A CI log check disproved that: on a run where `Restore native cache` reported a hit
-and `Prebuild (iOS)` was correctly skipped, `Build for iOS Simulator` still recompiled **every
-single Pod from source** (~350 `CompileC`/`SwiftCompile` invocations across all ~25
-Expo/RN modules) — a reported cache hit bought nothing.
+iOS caches the whole `ios/` tree (Pods + DerivedData) keyed by the `@expo/fingerprint` hash:
+on a hit, `expo prebuild`/`pod install` is skipped, saving that step's time; on a miss, a
+clean prebuild + full compile runs and populates the cache. The key folds in the resolved
+Node version (`ios-native-…-node<version>-<fp>`) because CocoaPods bakes an **absolute path**
+to the Node binary into the generated project (`.xcode.env.local`), so a tree built under a
+different Node version would point at a binary that no longer exists on the runner — bumping
+`.nvmrc` forces a fresh prebuild.
 
-The likely cause is the same shape as Android's bug: RN/Expo native modules are consumed as
-CocoaPods `:path` pods pointing at `node_modules/`, so the actual `.mm`/`.cpp` files Xcode
-compiles live in `node_modules/` rather than inside the cached `ios/` tree. `npm ci` runs
-_before_ `Restore native cache` in this job — same ordering as Android had — and restamps
-`node_modules` with fresh mtimes right before the (mtime-consistent, but now stale-relative-
-to-source) DerivedData gets restored, so Xcode's incremental build sees every input as
-"changed" and recompiles.
+**This does not make `xcodebuild` itself faster.** A CI log check (comparing a run with a
+reported cache hit against its actual `CompileC`/`SwiftCompile` count) showed every single Pod
+recompiling from source regardless — likely because RN/Expo native modules are consumed as
+CocoaPods `:path` pods pointing straight at `node_modules/`, and `npm ci` (which runs before
+the cache restore) restamps those files with fresh mtimes every job, so Xcode's incremental
+build treats them as changed no matter what DerivedData was restored. The tree cache is kept
+anyway because skipping `pod install` on a hit is a real, if modest, saving — the compile
+itself is not.
 
-The fix mirrors Android exactly: [`hendrikmuhs/ccache-action`](https://github.com/hendrikmuhs/ccache-action)
-(macOS-supported) plus `USE_CCACHE=1`. Unlike Android, this needs **no custom init script or
-config plugin** — RN's own `react_native_pods.rb` already reads
-`ccache_enabled: ENV['USE_CCACHE'] == '1'` and points `CC`/`CXX`/`LD`/`LDPLUSPLUS` at
-ccache-wrapping scripts it ships (`scripts/xcode/ccache-clang.sh`) during `pod install`, which
-runs inside `expo prebuild`. `Prebuild (iOS)` now runs unconditionally (previously gated on
-the tree-cache hit) so that wiring is always freshly baked in, matching Android's "drift-free
-by construction" reasoning; the old `ios/`-tree cache is removed since it's redundant once
-prebuild always runs `--clean` anyway, and wasn't earning its keep regardless (see above).
-The CocoaPods spec/artifact cache (`~/Library/Caches/CocoaPods`) is unrelated to this and
-stays — it isn't compiled output, so it doesn't have the mtime problem.
-
-> **A second gotcha, found on the first real run**: `USE_CCACHE=1`/`CCACHE_*` set as plain
-> shell `env:` on the `xcodebuild` step never reach the actual compiler. `xcodebuild` doesn't
-> forward the calling shell's environment into each compiler subprocess — only genuine Xcode
-> build settings (confirmed from that run's log: `CC`/`CCACHE_BINARY`, which `pod install`
-> wrote into the project as build settings, showed up in the per-file compile environment;
-> plain env vars did not, and ccache reported **zero** cacheable calls despite ~350 real
-> compiles happening — a wasted cold build, not a cache hit). Worse, RN's `ccache-clang.sh`
-> wrapper unconditionally points `CCACHE_CONFIGPATH` at its own bundled conf (which has no
-> `cache_dir`) unless the caller already set it — silently discarding the persistent
-> `cache_dir` `hendrikmuhs/ccache-action` configures, and sending every compile to ccache's
-> untracked default directory instead. The fix: generate one ccache config file with every
-> setting ccache needs (`cache_dir` read back from `ccache --get-config=cache_dir`,
-> `compiler_check`, `base_dir`, `hash_dir`, plus RN's recommended `sloppiness`), and pass its
-> path as the `CCACHE_CONFIGPATH` **build setting** on the `xcodebuild` command line — the
-> same mechanism `CODE_SIGNING_ALLOWED=NO` already uses on that line — so it actually reaches
-> the compiler.
+> **ccache was tried here and reverted** (see git history around 2026-07-23). Two mechanisms
+> were tested: RN's documented `CC`/`CXX`-substitution integration (`USE_CCACHE=1` via
+> `react_native_pods.rb`) never actually invoked ccache at all on this Xcode version — Xcode's
+> build log displays that command as text, but doesn't spawn it, confirmed with a throwaway
+> wrapper script that provably never ran. The newer `C_COMPILER_LAUNCHER`/
+> `CXX_COMPILER_LAUNCHER` mechanism (documented in a [ccache maintainer discussion](https://github.com/ccache/ccache/discussions/1670)
+> and tracked as an [open react-native issue](https://github.com/react/react-native/issues/55381))
+> _does_ get invoked, but every call comes back `Result: could_not_use_modules` in ccache's own
+> decision log — Clang's module-validation-session mechanism (`-fbuild-session-file` /
+> `-fmodules-validate-once-per-build-session`), which modern Xcode bakes in by default and
+> doesn't fully turn off via `CLANG_ENABLE_EXPLICIT_MODULES=NO` alone, defeats ccache's module
+> handling every time. Making it work would mean disabling Clang modules entirely
+> (`CLANG_ENABLE_MODULES=NO`), which risks breaking compilation against modular system
+> frameworks (Foundation, UIKit, …) — a disproportionate risk for a CI speed optimization on a
+> personal project. If a future ccache/Xcode release resolves the module-cache interaction,
+> this is worth revisiting; until then, the added complexity wasn't earning its keep.
