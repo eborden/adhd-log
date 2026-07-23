@@ -5,9 +5,11 @@ one number line so they never collide:
 
 - **Architecture / correctness (01–05)** — distilled from the architecture expert-panel review
   (2026-07-18). Fix confirmed data-loss paths and make the codebase's own contracts true.
-- **User-value / features (06–20)** — 06–16 distilled from the user-value analysis (2026-07-18);
-  17–20 distilled from the titration-log research (2026-07-21, `docs/research/titration-log-examples.md`).
-  Each run through the same 4-expert design-review panel (see "How the docs were produced").
+- **User-value / features (06–26)** — 06–16 distilled from the user-value analysis (2026-07-18);
+  17–20 distilled from the titration-log research (2026-07-21, `docs/research/titration-log-examples.md`);
+  21 a clinical-lens alternative to #13; 22–26 an innovation batch (2026-07-23) pushing capability
+  further while staying inside the collect → log → provider mission. Each run through the same
+  4-expert design-review panel (see "How the docs were produced").
 
 Do them roughly in numbered order within each track. The architecture track (01–05) generally
 comes first: several feature docs assume the schema-driven write path (02), tolerant parsing
@@ -51,12 +53,18 @@ Each doc references its source item in the user-value analysis.
 | 19  | [Titration onset context](19-titration-onset-context.md)                     | P2       | "Day/Week N on current dose" + honest "effects build over weeks" framing — reframes an early flat trend as expected, not failure; nothing persisted                                                                     |
 | 20  | [Combination / adjunct medication](20-combination-medication.md)             | P3       | Decision doc: ship single-med honesty copy now (Option A), hold the pre-designed optional-adjunct expansion (Option B), reject a full N-med manager (C)                                                                 |
 | 21  | [Weekly validated self-report instrument](21-weekly-validated-instrument.md) | P2       | Clinical-lens _alternative_ to #13: capture a validated instrument (ASRS) verbatim as raw-total trend. Panel outcome: #13 wins the weekly slot; this lands later as a monthly snapshot on the tracked med's own effects |
+| 22  | [Adaptive reminder timing](22-adaptive-reminder-timing.md)                   | P2       | Suggest (never auto-apply) a re-timed daily reminder from the user's own `completedAt` history — proactive complement to doc 15's reactive snooze/quick-actions                                                         |
+| 23  | [Trend divergence window](23-trend-divergence-window.md)                     | **P1**   | "Largest measured change" split-point search over a metric's range, reusing `computeTrend`'s exact thresholds — surfaces a slow-building shift the fixed midpoint arrow can dilute or miss                              |
+| 24  | [Post-visit provider decision log](24-visit-decision-log.md)                 | P2       | Extends doc 11's `Visit` with an optional structured decision (hold/increase/decrease/switch/adjunct/referral/other) + a display-time proximity note to any nearby dose change                                          |
+| 25  | [Intraday "moment" micro check-in](25-intraday-moment-log.md)                | P2       | Optional sub-5-second episodic capture (feeling + optional side effect + note) for symptom spikes that fade before the evening check-in — mirrors doc 17's append-only store shape                                      |
+| 26  | [Passive sleep corroboration (Health)](26-passive-sleep-corroboration.md)    | P3       | Decision doc (doc-20 format): opt-in HealthKit/Health Connect sleep-duration prefill for the existing `sleepHours` field. Recommends not building until manual-entry accuracy is a demonstrated pain point              |
 
-### How the 06–20 docs were produced
+### How the 06–26 docs were produced
 
 Each was drafted against this repo's real symbols/seams, then reviewed by a 4-lens expert
 panel before landing here (17–20 followed the identical process on 2026-07-21, sourced from
-`docs/research/titration-log-examples.md`; all four returned approve / approve-with-changes):
+`docs/research/titration-log-examples.md`; 22–26 followed it again on 2026-07-23 as an
+innovation batch; all returned approve / approve-with-changes):
 
 1. **Clinical / behavioral-health measurement** — is the captured data actually usable by a
    prescriber for non-stimulant titration, and does it stay descriptive (never advice)?
@@ -67,7 +75,7 @@ panel before landing here (17–20 followed the identical process on 2026-07-21,
    re-onboarding, migrate-on-read for changed shapes, 100% on-device, no scope creep into advice.
 
 Every doc ends with a **## Panel review** section recording each lens's verdict and what
-changed. All 06–20 came back `approve` / `approve-with-changes` (no rejects); must-fixes were
+changed. All 06–26 came back `approve` / `approve-with-changes` (no rejects); must-fixes were
 applied before commit.
 
 ## Ground rules that apply to every plan
